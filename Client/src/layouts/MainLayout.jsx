@@ -65,7 +65,26 @@ const MainLayout = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-gray-50 flex ${theme === 'dark' ? 'dark' : ''}`}>
+    <div className={`min-h-screen flex ${theme === 'dark' ? 'dark' : ''}`} style={{
+      position: 'relative',
+      backgroundColor: '#fafafa'
+    }}>
+      {/* Subtle grid background - same as login page */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: `
+          linear-gradient(rgba(0,50,153,.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,50,153,.08) 1px, transparent 1px)
+        `,
+        backgroundSize: '40px 40px',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+      
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -80,6 +99,7 @@ const MainLayout = () => {
           fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:inset-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
+        style={{ zIndex: 10 }}
       >
         <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
           <div className="flex items-center">
@@ -145,7 +165,7 @@ const MainLayout = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 lg:ml-64">
+      <div className="flex-1 lg:ml-64" style={{ zIndex: 10, position: 'relative' }}>
         {/* Top header */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">

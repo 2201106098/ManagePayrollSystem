@@ -456,8 +456,8 @@ export default function Login() {
       <div className="login-left">
         <div className="brand-block">
           {/* Logo */}
-          <div className="brand-logo" style={{ justifyContent: 'center', display: 'flex', width: '190px', backgroundColor: 'white', padding: '5px', margin: '55px auto 0 auto' }}>
-            <img src="/logo.png" alt="Datalogix Logo" style={{ width: '180px', height: '50px' }} />
+          <div className="brand-logo" style={{ justifyContent: 'center', display: 'flex', width: '240px', backgroundColor: 'white', padding: '8px', margin: '55px auto 0 auto' }}>
+            <img src="/logo.png" alt="Datalogix Logo" style={{ width: '220px', height: '60px' }} />
           </div>
 
           {/* Headline */}

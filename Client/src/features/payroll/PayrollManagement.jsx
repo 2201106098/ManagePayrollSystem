@@ -132,9 +132,25 @@ const PayrollManagement = ({ children }) => {
     <div style={{ 
       width: '100vw', 
       minHeight: '100vh', 
-      background: 'var(--bg)',
-      overflow: 'hidden'
+      background: '#fafafa',
+      overflow: 'hidden',
+      position: 'relative'
     }}>
+      {/* Subtle grid background - same as login page */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: `
+          linear-gradient(rgba(0,50,153,.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,50,153,.08) 1px, transparent 1px)
+        `,
+        backgroundSize: '40px 40px',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
       {/* Sidebar - Original Design */}
       <aside style={{ 
         background: '#610000', 
@@ -387,7 +403,9 @@ const PayrollManagement = ({ children }) => {
           width: `calc(100vw - ${sidebarCollapsed ? '68px' : '260px'})`,
           minHeight: '100vh',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          position: 'relative',
+          zIndex: 10
         }}
       >
         {/* Top Bar - Hide on payslip page */}

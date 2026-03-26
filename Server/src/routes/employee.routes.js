@@ -3,9 +3,13 @@ const router = express.Router();
 const employeeController = require('../controllers/employee.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const { validateEmployee } = require('../middleware/validation.middleware');
+const { dataLimiter } = require('../middleware/rate-limit');
 
 // Apply authentication to all routes
 router.use(authenticate);
+
+// Apply data rate limiter to all employee routes
+router.use(dataLimiter);
 
 // GET /api/employees - Get all employees with pagination and filtering
 router.get('/', employeeController.getAllEmployees);

@@ -179,7 +179,7 @@ const HourlyRates = () => {
       {/* Current Rates Header */}
       <div className="sec-head" style={{ fontFamily: "Playfair Display, serif", fontSize: '17px', fontWeight: '700', color: 'var(--navy)', marginBottom: '22px', display: 'flex', alignItems: 'center', gap: '10px' }}>
         Current Rates
-        <div style={{ content: '', flex: 1, height: '2px', background: 'linear-gradient(to right,#e0d4c8,transparent)' }}></div>
+        <div style={{ flex: 1, height: '2px', background: 'linear-gradient(to right,#e0d4c8,transparent)', minWidth: '50px' }}></div>
       </div>
 
       {/* Rates Table */}

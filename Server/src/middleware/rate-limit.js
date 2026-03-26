@@ -15,21 +15,29 @@ const createRateLimiter = (windowMs, max, message) => {
   });
 };
 
-// General API rate limiter
+// General API rate limiter (more lenient for development)
 const apiLimiter = createRateLimiter(
   env.rateLimitWindowMs,
   env.rateLimitMaxRequests,
   'Too many requests from this IP, please try again later.'
 );
 
+// Less strict rate limiter for data endpoints (employees, rates, etc.)
+const dataLimiter = createRateLimiter(
+  60000, // 1 minute
+  2000, // 2000 requests per minute
+  'Too many data requests, please try again later.'
+);
+
 // Strict rate limiter for auth endpoints
 const authLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  5, // 5 attempts
+  10, // 10 attempts (increased from 5)
   'Too many authentication attempts, please try again later.'
 );
 
 module.exports = {
   apiLimiter,
-  authLimiter
+  authLimiter,
+  dataLimiter
 };

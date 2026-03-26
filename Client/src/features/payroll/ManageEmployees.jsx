@@ -563,7 +563,10 @@ export default function ManageEmployees() {
 
       {/* Sub row — title + archived toggle + search */}
       <div style={s.subRow}>
-        <div style={s.listTitle}>Employee List</div>
+        <div className="sec-head" style={{ fontFamily: "Playfair Display, serif", fontSize: '17px', fontWeight: '700', color: 'var(--navy)', marginBottom: '0px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          Employee List
+          <div style={{ flex: 1, height: '2px', background: 'linear-gradient(to right,#e0d4c8,transparent)', minWidth: '50px' }}></div>
+        </div>
         <div style={s.subRight}>
           <button
             style={s.archivedBtn}
