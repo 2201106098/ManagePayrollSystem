@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { Modal } from '../../components';
 import PayrollDashboard from './PayrollDashboard';
 import ManageEmployees from './ManageEmployees';
 import WorkHours from './WorkHours';
@@ -22,6 +23,7 @@ import PeriodSettings from './PeriodSettings';
 
 const PayrollManagement = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
@@ -111,16 +113,19 @@ const PayrollManagement = ({ children }) => {
   };
 
   const handleLogout = async () => {
-    if (confirm('Log out of the system?')) {
-      try {
-        await logout();
-        navigate('/login');
-      } catch (error) {
-        console.error('Logout error:', error);
-        // Still navigate even if logout API fails
-        navigate('/login');
-      }
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still navigate even if logout API fails
+      navigate('/login');
     }
+    setShowLogoutModal(false);
   };
 
   return (
@@ -462,6 +467,82 @@ const PayrollManagement = ({ children }) => {
           {renderActivePage()}
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        size="sm"
+        closeOnOverlayClick={true}
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <LogOut size={48} style={{ color: '#dc2626', margin: '0 auto 16px' }} />
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
+              Confirm Logout
+            </h3>
+            <p style={{ margin: '0', fontSize: '14px', color: '#6b7280' }}>
+              Are you sure you want to log out of the system?
+            </p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button
+              onClick={() => setShowLogoutModal(false)}
+              style={{
+                padding: '10px 20px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                background: '#ffffff',
+                color: '#6b7280',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = '#f9fafb';
+                e.target.style.borderColor = '#d1d5db';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = '#ffffff';
+                e.target.style.borderColor = '#e5e7eb';
+              }}
+            >
+              Cancel
+            </button>
+            
+            <button
+              onClick={confirmLogout}
+              style={{
+                padding: '10px 20px',
+                border: '2px solid #dc2626',
+                borderRadius: '8px',
+                background: '#dc2626',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = '#b91c1c';
+                e.target.style.borderColor = '#b91c1c';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = '#dc2626';
+                e.target.style.borderColor = '#dc2626';
+              }}
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
