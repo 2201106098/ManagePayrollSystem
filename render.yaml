@@ -3,10 +3,13 @@ services:
   - type: web
     name: payroll-backend
     env: node
-    repo: https://github.com/your-username/ManagePayrollSystem.git
+    plan: free
+    region: oregon
+    branch: main
     rootDir: Server
-    buildCommand: "npm install"
-    startCommand: "npm start"
+    buildCommand: "npm install --production"
+    startCommand: "node server.js"
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -18,17 +21,9 @@ services:
         sync: false
       - key: JWT_EXPIRE
         value: 7d
-      - key: EMAIL_HOST
-        value: smtp.gmail.com
-      - key: EMAIL_PORT
-        value: 587
-      - key: EMAIL_USER
-        sync: false
-      - key: EMAIL_PASS
+      - key: CLIENT_URL
         sync: false
       - key: RATE_LIMIT_WINDOW_MS
         value: 60000
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 500
-      - key: CLIENT_URL
-        sync: false
