@@ -17,11 +17,11 @@ router.get('/', employeeRateController.getAllEmployeeRates);
 // GET /api/employee-rates/statistics - Get employee rate statistics
 router.get('/statistics', authorize(['admin', 'hr']), employeeRateController.getEmployeeRateStatistics);
 
-// GET /api/employee-rates/:id - Get employee rate by ID
-router.get('/:id', employeeRateController.getEmployeeRateById);
-
 // GET /api/employee-rates/employee/:employeeId - Get employee rate by employee ID
 router.get('/employee/:employeeId', employeeRateController.getEmployeeRateByEmployeeId);
+
+// GET /api/employee-rates/:id - Get employee rate by ID
+router.get('/:id', employeeRateController.getEmployeeRateById);
 
 // POST /api/employee-rates - Create or update employee rate (admin/hr only)
 router.post('/', 

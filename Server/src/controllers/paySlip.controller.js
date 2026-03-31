@@ -5,15 +5,94 @@ const WorkHour = require('../models/WorkHour.model');
 const PeriodSettings = require('../models/PeriodSettings.model');
 const { createResponse } = require('../utils/response');
 
+const hasWorkedTime = (day) => {
+  if (!day) return false;
+  return Boolean(
+    (day.hours || 0) > 0 ||
+    (day.overtime || 0) > 0 ||
+    day.timeIn ||
+    day.timeOut ||
+    day.breakTime ||
+    day.resume
+  );
+};
+
+const countOutOfTownDays = (workDays) => {
+  if (!Array.isArray(workDays)) return 0;
+  return workDays.filter(d => d?.status === 'out_of_town').length;
+};
+
+const computeUndertimeDeduction = (workDays, baseRate, outOfTownRate) => {
+  if (!Array.isArray(workDays)) return 0;
+  let total = 0;
+  for (const d of workDays) {
+    const status = d?.status || 'present';
+    const hours = Number(d?.hours || 0);
+    let expected = 0;
+    if (status === 'present' || status === 'out_of_town') expected = 8;
+    if (status.startsWith && status.startsWith('halfday')) expected = 4;
+    const shortfall = Math.max(0, expected - hours);
+    if (shortfall > 0) {
+      const dayRate = status === 'out_of_town' && outOfTownRate > 0 ? outOfTownRate : baseRate;
+      total += shortfall * dayRate;
+    }
+  }
+  return total;
+};
+
+const timeToMinutes = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const t = value.trim();
+  const match12 = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match12) {
+    let h = Number(match12[1]);
+    const m = Number(match12[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    const meridiem = match12[3].toUpperCase();
+    if (meridiem === 'PM' && h !== 12) h += 12;
+    if (meridiem === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  }
+  const match24 = t.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (match24) {
+    const h = Number(match24[1]);
+    const m = Number(match24[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return h * 60 + m;
+  }
+  return null;
+};
+
+const resolveWorkHourHours = (workHour) => {
+  if (!workHour) return 0;
+  const savedHours = Number(workHour.totalHours);
+  if (Number.isFinite(savedHours) && savedHours > 0) return savedHours;
+  const start = timeToMinutes(workHour.timeIn);
+  const end = timeToMinutes(workHour.timeOut);
+  if (start !== null && end !== null) {
+    let mins = end - start;
+    const breakStart = timeToMinutes(workHour.breakTime);
+    const breakEnd = timeToMinutes(workHour.resume);
+    if (breakStart !== null && breakEnd !== null && breakEnd > breakStart) {
+      mins -= (breakEnd - breakStart);
+    }
+    if (mins > 0) return mins / 60;
+  }
+  if (workHour.status && workHour.status.startsWith('halfday')) {
+    return 4;
+  }
+  return 0;
+};
+
 // Generate pay slip for an employee for a specific period
-const generatePaySlip = async (req, res) => {
+const generatePaySlip = async (req, res, next) => {
   try {
     const { employeeId, year, month, periodId } = req.body;
     const userId = req.user?.userId;
     
     console.log('Generating payslip with:', { employeeId, year, month, periodId, userId });
     
-    if (!employeeId || !year || !month || !periodId) {
+    if (!employeeId || !year || month === undefined || month === null || !periodId) {
       console.log('Missing required fields:', { employeeId, year, month, periodId });
       return res.status(400).json(createResponse(false, 'Employee ID, year, month, and period ID are required'));
     }
@@ -28,12 +107,20 @@ const generatePaySlip = async (req, res) => {
 
     // Get employee billing rate from HourlyRates (EmployeeRate collection)
     const employeeRateDoc = await EmployeeRate.findOne({ employee: employeeId });
-    // billingRate from HourlyRates page, fallback to employee fields, then to default
-    const billingRate = employeeRateDoc?.billingRate
-      || employee.hourlyRate
-      || (employee.basicRate ? employee.basicRate / 160 : 0);
-    const overtimeRatePerHr = employeeRateDoc?.overtimeRate || (billingRate * 1.25);
-    const outOfTownRate = employeeRateDoc?.outOfTownRate || 0;
+    const employeeRateValue = Number(employeeRateDoc?.billingRate);
+    const employeeHourlyValue = Number(employee.hourlyRate);
+    const fallbackRateValue = Number(employee.basicRate ? employee.basicRate / 160 : 0);
+    const billingRate = Number.isFinite(employeeRateValue) && employeeRateValue > 0
+      ? employeeRateValue
+      : Number.isFinite(employeeHourlyValue) && employeeHourlyValue > 0
+        ? employeeHourlyValue
+        : (Number.isFinite(fallbackRateValue) ? fallbackRateValue : 0);
+    const overtimeRateRaw = Number(employeeRateDoc?.overtimeRate);
+    const overtimeRatePerHr = Number.isFinite(overtimeRateRaw) && overtimeRateRaw > 0
+      ? overtimeRateRaw
+      : (billingRate * 1.25);
+    const outOfTownRateRaw = Number(employeeRateDoc?.outOfTownRate ?? 0);
+    const outOfTownRate = Number.isFinite(outOfTownRateRaw) ? outOfTownRateRaw : 0;
     console.log('Resolved hourly rate:', billingRate, '| Overtime rate:', overtimeRatePerHr, '| Out of town rate:', outOfTownRate);
     
     // Get period settings
@@ -117,7 +204,7 @@ const generatePaySlip = async (req, res) => {
         
         if (workHour) {
           status = workHour.status || 'present';
-          hours = workHour.totalHours || 0;
+          hours = resolveWorkHourHours(workHour);
           overtime = workHour.overtime || 0;
           timeIn = workHour.timeIn || null;
           breakTime = workHour.breakTime || null;
@@ -154,7 +241,27 @@ const generatePaySlip = async (req, res) => {
       const allowances = [];
       const deductions = [];
 
-      // Manually compute totals (findOneAndUpdate bypasses pre-save middleware)
+      // Add out-of-town allowance (per-day), based on work day statuses
+      const outOfTownDays = countOutOfTownDays(workDays);
+      if (outOfTownRate > 0 && outOfTownDays > 0) {
+        allowances.push({
+          type: 'out_of_town',
+          amount: outOfTownRate * outOfTownDays,
+          description: `Out of Town (${outOfTownDays} day${outOfTownDays>1?'s':''} × ${outOfTownRate})`
+        });
+      }
+
+      // Add undertime deduction (hours shortfall from expected hours)
+      const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate, outOfTownRate);
+      if (undertimeAmount > 0) {
+        deductions.push({
+          type: 'undertime',
+          amount: undertimeAmount,
+          description: 'Undertime based on hours shortfall'
+        });
+      }
+
+      // Manually compute totals
       const totalHours = workDays.reduce((sum, d) => sum + (d.hours || 0), 0);
       const totalOvertime = workDays.reduce((sum, d) => sum + (d.overtime || 0), 0);
       const workingDays = workDays.filter(d => d.status === 'present' || (d.status && d.status.startsWith('halfday'))).length;
@@ -276,7 +383,7 @@ const generatePaySlip = async (req, res) => {
       
       if (workHour) {
         status = workHour.status || 'present';
-        hours = workHour.totalHours || 0;
+        hours = resolveWorkHourHours(workHour);
         overtime = workHour.overtime || 0;
         timeIn = workHour.timeIn || null;
         breakTime = workHour.breakTime || null;
@@ -318,22 +425,24 @@ const generatePaySlip = async (req, res) => {
       allowances.push(...period.allowances);
     }
 
-    // Add out-of-town allowance if employee has one and worked out-of-town days
-    if (outOfTownRate > 0) {
-      // Count out-of-town days in the work period
-      const outOfTownDays = workDays.filter(d => d.status === 'out_of_town').length;
-      const totalOutOfTownAllowance = outOfTownDays * outOfTownRate;
-      
-      if (totalOutOfTownAllowance > 0) {
-        allowances.push({
-          name: 'Out of Town Allowance',
-          amount: totalOutOfTownAllowance,
-          type: 'allowance',
-          days: outOfTownDays,
-          ratePerDay: outOfTownRate
-        });
-        console.log(`Added out-of-town allowance: ${outOfTownDays} days × ₱${outOfTownRate} = ₱${totalOutOfTownAllowance}`);
-      }
+    // Add out-of-town allowance (per-day), based on work day statuses
+    const outOfTownDays = countOutOfTownDays(workDays);
+    if (outOfTownRate > 0 && outOfTownDays > 0) {
+      allowances.push({
+        type: 'out_of_town',
+        amount: outOfTownRate * outOfTownDays,
+        description: `Out of Town (${outOfTownDays} day${outOfTownDays>1?'s':''} × ${outOfTownRate})`
+      });
+    }
+
+    // Add undertime deduction (hours shortfall from expected hours)
+    const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate, outOfTownRate);
+    if (undertimeAmount > 0) {
+      deductions.push({
+        type: 'undertime',
+        amount: undertimeAmount,
+        description: 'Undertime based on hours shortfall'
+      });
     }
 
     // Manually compute totals (findOneAndUpdate bypasses pre-save middleware)
@@ -404,7 +513,7 @@ const generatePaySlip = async (req, res) => {
 };
 
 // Get pay slips for an employee
-const getEmployeePaySlips = async (req, res) => {
+const getEmployeePaySlips = async (req, res, next) => {
   try {
     const { employeeId, year, month } = req.query;
     const userId = req.user?.userId;
@@ -427,7 +536,7 @@ const getEmployeePaySlips = async (req, res) => {
 };
 
 // Get specific pay slip by ID
-const getPaySlipById = async (req, res) => {
+const getPaySlipById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user?.userId;
@@ -453,7 +562,7 @@ const getPaySlipById = async (req, res) => {
 };
 
 // Update pay slip (add allowances, deductions, etc.)
-const updatePaySlip = async (req, res) => {
+const updatePaySlip = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { allowances, deductions, status } = req.body;
@@ -497,7 +606,7 @@ const updatePaySlip = async (req, res) => {
 };
 
 // Delete pay slip
-const deletePaySlip = async (req, res) => {
+const deletePaySlip = async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user?.userId;

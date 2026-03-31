@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { employeeAPI } from "../../api/employee.api";
 import ShimmerLoader from "../../components/ui/ShimmerLoader";
 import { TableShimmer, CardShimmer } from "../../components/ui/ShimmerLoader";
+import { addActivity } from "../../utils/activityLog";
 
 /* ── icons (inline SVG, no external deps) ── */
 const IconPlus = () => (
@@ -97,6 +98,7 @@ export default function ManageEmployees() {
   const [editingId, setEditingId]   = useState(null);
   const [showModal, setShowModal]   = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch]         = useState("");
   const [page, setPage]             = useState(1);
@@ -153,10 +155,16 @@ export default function ManageEmployees() {
   };
   const closeModal = () => { setShowModal(false); setEditingId(null); setForm(EMPTY_FORM); };
 
-  const handleArchive = async (id) => {
+  const handleArchive = async (emp) => {
     try {
-      await employeeAPI.archiveEmployee(id);
-      fetchEmployees(); // Refresh the list
+      await employeeAPI.archiveEmployee(emp._id);
+      fetchEmployees();
+      const fullName = emp.name || `${emp.firstName || ""} ${emp.middleInitial ? emp.middleInitial + '. ' : ''}${emp.lastName || ""}`.trim();
+      addActivity({
+        emp: fullName || 'Employee',
+        action: emp.isArchived ? 'Employee Unarchived' : 'Employee Archived',
+        status: 'Done'
+      });
     } catch (err) {
       console.error('Error archiving employee:', err);
       setError(err.response?.data?.message || 'Failed to archive employee');
@@ -166,15 +174,18 @@ export default function ManageEmployees() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setIsSaving(true);
       setError("");
       
       if (editingId) {
-        // Update existing employee
         await employeeAPI.updateEmployee(editingId, form);
+        const fullName = `${form.firstName} ${form.middleInitial ? form.middleInitial + '. ' : ''}${form.lastName}`.trim();
+        addActivity({ emp: fullName || 'Employee', action: 'Employee Updated', status: 'Done' });
       } else {
-        // Create new employee
         await employeeAPI.createEmployee(form);
-        setShowSuccessModal(true); // Show success modal for new employees
+        const fullName = `${form.firstName} ${form.middleInitial ? form.middleInitial + '. ' : ''}${form.lastName}`.trim();
+        addActivity({ emp: fullName || 'Employee', action: 'Employee Added', status: 'Done' });
+        setShowSuccessModal(true);
       }
       
       closeModal();
@@ -182,7 +193,18 @@ export default function ManageEmployees() {
       setPage(1);
     } catch (err) {
       console.error('Error saving employee:', err);
-      setError(err.response?.data?.message || 'Failed to save employee');
+      const msg = err?.response?.data?.message || '';
+      if (/validation failed/i.test(msg)) {
+        if (!form.email || String(form.email).trim() === '') {
+          setError('Please fill this out');
+        } else {
+          setError('Validation failed: ensure all required fields are filled and the email is a valid address.');
+        }
+      } else {
+        setError(msg || 'Failed to save employee');
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -573,7 +595,7 @@ export default function ManageEmployees() {
             onClick={() => { setShowArchived(!showArchived); setPage(1); }}
           >
             {!showArchived ? <IconArchiveFilled /> : <IconArchive />}
-            {!showArchived ? "hide archived" : "show archived"}
+            {!showArchived ? "show archived" : "hide archived"}
           </button>
           <div style={s.searchWrap}>
             <span style={s.searchIcon}><IconSearch /></span>
@@ -659,7 +681,7 @@ export default function ManageEmployees() {
                         style={s.actionBtn(`arch-${emp._id}`, emp.isArchived ? "#059669" : RED)}
                         onMouseEnter={() => setHoveredBtn(`arch-${emp._id}`)}
                         onMouseLeave={() => setHoveredBtn(null)}
-                        onClick={() => handleArchive(emp._id)}
+                        onClick={() => handleArchive(emp)}
                       >
                         {emp.isArchived ? <IconArchiveFilled /> : <IconArchive />}
                       </button>
@@ -756,14 +778,40 @@ export default function ManageEmployees() {
                 </div>
                 <div style={s.fg}>
                   <label style={s.flabel}>Email</label>
-                  <input style={s.finput} type="email" name="email" value={form.email}
+                  <input
+                    style={s.finput}
+                    type="email"
+                    name="email"
+                    value={form.email}
                     onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                    placeholder="employee@datalogix.com.ph" />
+                    onInvalid={e => e.target.setCustomValidity('Please fill this out')}
+                    onInput={e => e.target.setCustomValidity('')}
+                    placeholder="employee@datalogix.com.ph"
+                    required
+                  />
                 </div>
               </div>
               <div style={s.modalActions}>
                 <button type="button" style={s.cancelBtn} onClick={closeModal}>Cancel</button>
-                <button type="submit" style={s.submitBtn}>{editingId ? "Update Employee" : "Add Employee"}</button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  style={{
+                    ...s.submitBtn,
+                    background: isSaving ? '#ccc' : RED,
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {isSaving && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                  )}
+                  {isSaving ? 'Saving...' : (editingId ? "Update Employee" : "Add Employee")}
+                </button>
               </div>
             </form>
           </div>

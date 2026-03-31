@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import periodSettingsAPI from "../../api/periodSettings.api";
 import ShimmerLoader from "../../components/ui/ShimmerLoader";
 import { CardShimmer, FormShimmer } from "../../components/ui/ShimmerLoader";
+import { addActivity } from "../../utils/activityLog";
 
 /* ── constants ── */
 const RED   = "#A72703";
@@ -15,6 +16,25 @@ const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December",
 ];
+
+const PS_CACHE_KEY = "periodSettingsCache";
+const cacheKey = (y,m) => `${y}-${m}`;
+const loadCachedPeriods = (y,m) => {
+  try {
+    const raw = localStorage.getItem(PS_CACHE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return data[cacheKey(y,m)] || null;
+  } catch { return null; }
+};
+const saveCachedPeriods = (y,m,periods) => {
+  try {
+    const raw = localStorage.getItem(PS_CACHE_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    data[cacheKey(y,m)] = periods;
+    localStorage.setItem(PS_CACHE_KEY, JSON.stringify(data));
+  } catch {}
+};
 
 /* ── helpers ── */
 const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
@@ -90,6 +110,7 @@ export default function PeriodSettings() {
   const [saved,    setSaved]    = useState(false);
   const [hovBtn,   setHovBtn]   = useState(null);
   const [loading,  setLoading]  = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error,    setError]    = useState(null);
 
   const dim = daysInMonth(year, month);  // days in selected month
@@ -103,7 +124,8 @@ export default function PeriodSettings() {
       label:        p.label,
       startDay:     p.startDay,
       endDay:       p.endDay === 0 ? dim : p.endDay,
-      payday:       p.endDay === 0 ? dim : p.endDay, // Payday equals end day
+      payday:       p.endDay === 0 ? dim : p.endDay,
+      payNextMonth: !!p.payNextMonth,
     });
     setEditing(p.id);
     setSaved(false);
@@ -111,22 +133,41 @@ export default function PeriodSettings() {
 
   const closeEdit = () => { setEditing(null); setForm({}); };
 
-  const handleSave = () => {
-    setPeriods(prev => prev.map(p =>
-      p.id === editing
-        ? {
-            ...p,
-            label:        form.label,
-            startDay:     Number(form.startDay),
-            endDay:       Number(form.endDay) === dim ? 0 : Number(form.endDay),
-            payday:       Number(form.endDay) === dim ? 0 : Number(form.endDay), // Payday equals end day
-          }
-        : p
-    ));
-    setSaved(true);
-    setTimeout(() => { closeEdit(); setSaved(false); }, 900);
-    // Also save to backend after local update
-    setTimeout(() => saveToBackend(), 100);
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      setError(null);
+      const updated = periods.map(p =>
+        p.id === editing
+          ? {
+              ...p,
+              label:        form.label,
+              startDay:     Number(form.startDay),
+              endDay:       Number(form.endDay) === dim ? 0 : Number(form.endDay),
+              payday:       Number(form.endDay) === dim ? 0 : Number(form.endDay),
+              payNextMonth: !!form.payNextMonth,
+            }
+          : p
+      );
+      setPeriods(updated);
+      saveCachedPeriods(year, month, updated);
+      setSaved(true);
+      const dataToSave = {
+        year,
+        month,
+        periods: updated
+      };
+      await periodSettingsAPI.savePeriodSettings(dataToSave);
+      try{
+        addActivity({ emp: 'System', action: 'Period Settings Updated', status: 'Done' });
+      }catch{}
+      setTimeout(() => { closeEdit(); setSaved(false); }, 900);
+    } catch (err) {
+      setError(err.message || 'Failed to save period settings');
+      setSaved(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   /* compute effective endDay for display */
@@ -151,19 +192,29 @@ export default function PeriodSettings() {
       const response = await periodSettingsAPI.getPeriodSettings(year, month);
       
       if (response.success && response.data) {
-        // Handle both default settings and saved settings
         const settingsData = response.data;
-        
-        if (settingsData.periods) {
-          setPeriods(settingsData.periods);
-        } else if (settingsData.data && settingsData.data.periods) {
-          setPeriods(settingsData.data.periods);
+        const fromApi =
+          settingsData.periods
+            ? settingsData.periods
+            : settingsData.data && settingsData.data.periods
+              ? settingsData.data.periods
+              : null;
+        if (Array.isArray(fromApi) && fromApi.length) {
+          setPeriods(fromApi);
+          saveCachedPeriods(year, month, fromApi);
+        } else {
+          const cached = loadCachedPeriods(year, month);
+          if (cached) setPeriods(cached);
         }
+      } else {
+        const cached = loadCachedPeriods(year, month);
+        if (cached) setPeriods(cached);
       }
     } catch (err) {
       console.error('Error fetching period settings:', err);
       setError(err.message || 'Failed to fetch period settings');
-      // Keep using default periods on error
+      const cached = loadCachedPeriods(year, month);
+      if (cached) setPeriods(cached);
     } finally {
       setLoading(false);
     }
@@ -190,6 +241,9 @@ export default function PeriodSettings() {
         // Show success feedback
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
+        try{
+          addActivity({ emp: 'System', action: 'Period Settings Updated', status: 'Done' });
+        }catch{}
       }
     } catch (err) {
       console.error('Error saving period settings:', err);
@@ -880,9 +934,9 @@ export default function PeriodSettings() {
                   {form.payNextMonth && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={WHITE} strokeWidth="3.5"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <div>
-                  <div style={{ fontSize: "13.5px", fontWeight: "600", color: NAVY }}>Payday is in the following month</div>
+                  <div style={{ fontSize: "13.5px", fontWeight: "600", color: NAVY }}>Payday schedule repeats the following month</div>
                   <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "1px" }}>
-                    e.g. Second half paid on the 5th of next month
+                    e.g. Second half will be paid on the 15th next month as well
                   </div>
                 </div>
               </div>
@@ -913,8 +967,30 @@ export default function PeriodSettings() {
             {/* actions */}
             <div style={s.modalActions}>
               <button style={s.cancelBtn} onClick={closeEdit}>Cancel</button>
-              <button style={s.saveBtn(editingPeriod.color)} onClick={handleSave}>
-                {saved ? <><IconCheck /> Saved!</> : "Save Period"}
+              <button 
+                style={{
+                  ...s.saveBtn(editingPeriod.color),
+                  background: isSaving ? '#ccc' : (saved ? "#10b981" : editingPeriod.color),
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }} 
+                onClick={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    Saving...
+                  </>
+                ) : saved ? (
+                  <><IconCheck /> Saved!</>
+                ) : (
+                  "Save Period"
+                )}
               </button>
             </div>
           </div>

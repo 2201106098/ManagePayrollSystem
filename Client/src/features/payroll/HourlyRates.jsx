@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Edit, Save, Users } from 'lucide-react';
+import { Edit, Save, Users } from 'lucide-react';
 import employeeRateAPI from '../../api/employeeRate.api';
 import { employeeAPI } from '../../api/employee.api';
 import ShimmerLoader from '../../components/ui/ShimmerLoader';
 import { TableShimmer } from '../../components/ui/ShimmerLoader';
+import { addActivity } from '../../utils/activityLog';
 
 const HourlyRates = () => {
   const [rates, setRates] = useState([]);
@@ -14,6 +15,9 @@ const HourlyRates = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showZeroModal, setShowZeroModal] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState(null);
   const [formData, setFormData] = useState({
     employee: '',
     billingRate: '',
@@ -21,6 +25,7 @@ const HourlyRates = () => {
     outOfTownRate: '',
     cashAdvanceLimit: '',
   });
+  const isFormIncomplete = !formData.employee;
 
   // Fetch employees and rates
   const fetchData = async () => {
@@ -110,20 +115,46 @@ const HourlyRates = () => {
   };
 
   // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const proceedSave = async (payload) => {
     try {
+      setIsSaving(true);
       setError('');
-      
-      await employeeRateAPI.createOrUpdateEmployeeRate(formData);
-      
-      // Refresh data
+      if (editingId) {
+        await employeeRateAPI.updateEmployeeRate(editingId, payload);
+      } else {
+        await employeeRateAPI.createOrUpdateEmployeeRate(payload);
+      }
+      const target = employees.find(e => e._id === (payload.employee || formData.employee));
+      const empName = target ? `${target.firstName||''} ${target.middleInitial?target.middleInitial+'. ':''}${target.lastName||''}`.trim() : 'Employee';
+      addActivity({ emp: empName || 'Employee', action: 'Rate Updated', status: 'Done' });
       await fetchData();
+      setShowZeroModal(false);
+      setPendingPayload(null);
       closeModal();
     } catch (err) {
-      console.error('Error saving rate:', err);
       setError(err.response?.data?.message || 'Failed to save rate');
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (isSaving) return;
+    const payload = {
+      employee: formData.employee,
+      billingRate: parseFloat(formData.billingRate) || 0,
+      overtimeRate: parseFloat(formData.overtimeRate) || 0,
+      outOfTownRate: parseFloat(formData.outOfTownRate) || 0,
+      cashAdvanceLimit: parseFloat(formData.cashAdvanceLimit) || 0
+    };
+    const allZeroRates = payload.billingRate === 0 && payload.overtimeRate === 0 && payload.outOfTownRate === 0;
+    if (allZeroRates) {
+      setPendingPayload(payload);
+      setShowZeroModal(true);
+      return;
+    }
+    await proceedSave(payload);
   };
 
   
@@ -171,7 +202,7 @@ const HourlyRates = () => {
             transition: 'all .2s'
           }}
         >
-          <DollarSign size={18} />
+          <i className="fa-solid fa-peso-sign" style={{ fontSize: '16px' }}></i>
           Set / Update Rate
         </button>
       </div>
@@ -224,31 +255,34 @@ const HourlyRates = () => {
                     {rate.employee.name || `${rate.employee.firstName} ${rate.employee.middleInitial ? rate.employee.middleInitial + '. ' : ''}${rate.employee.lastName}`}
                   </td>
                   <td style={{ padding: '12px', fontSize: '13.5px', color: 'var(--navy)' }}>{rate.employee.designation}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{rate.billingRate.toFixed(2)}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{rate.overtimeRate.toFixed(2)}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{rate.outOfTownRate.toFixed(2)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{Number(rate.billingRate).toFixed(3)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{Number(rate.overtimeRate).toFixed(3)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{Number(rate.outOfTownRate).toFixed(3)}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontSize: '13.5px', color: 'var(--navy)' }}>₱{rate.cashAdvanceLimit.toFixed(2)}</td>
                   <td style={{ padding: '12px', textAlign: 'center', fontSize: '13.5px', color: 'var(--navy)' }}>
                     {new Date(rate.lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     <button 
+                      title="Edit"
                       onClick={() => openEditModal(rate)} 
-                      className="btn btn-out btn-sm"
-                      style={{ 
-                        padding: '4px 11px', 
-                        fontSize: '11.5px', 
-                        borderRadius: '7px', 
-                        fontFamily: "'DM Sans', sans-serif", 
-                        fontWeight: '600', 
-                        cursor: 'pointer', 
-                        border: 'none', 
-                        background: 'var(--red)', 
-                        color: 'var(--white)' 
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#610000',
+                        fontSize: '16px',
+                        cursor: 'pointer',
+                        padding: '6px',
+                        borderRadius: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                       }}
                     >
-                      <Edit size={12} style={{ marginRight: '4px' }} />
-                      Edit
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
                     </button>
                   </td>
                 </tr>
@@ -263,60 +297,87 @@ const HourlyRates = () => {
       {showModal && (
         <div style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
+          inset: 0,
+          background: 'rgba(0,0,0,.6)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000
+          zIndex: 9999
         }}>
           <div style={{
-            background: 'var(--white)',
-            borderRadius: '13px',
-            padding: '22px',
+            background: '#FFFFFF',
+            borderRadius: '14px',
+            padding: '28px 30px',
             width: '90%',
-            maxWidth: '600px',
+            maxWidth: '560px',
             maxHeight: '90vh',
             overflowY: 'auto',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+            boxShadow: '0 12px 48px rgba(0,0,0,.22)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontFamily: "Playfair Display, serif", fontSize: '17px', fontWeight: '700', color: 'var(--navy)', margin: 0 }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px'
+            }}>
+              <div style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#610000',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
                 {editingId ? 'Update Rate' : 'Set Rate'}
-              </h3>
+              </div>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
+                disabled={isSaving}
                 style={{
                   background: 'none',
                   border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: '#999',
-                  padding: '0',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  fontSize: '22px',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  color: '#8a8a8a',
+                  lineHeight: 1,
+                  padding: '2px 6px',
+                  opacity: isSaving ? 0.5 : 1
                 }}
               >
                 ×
               </button>
             </div>
+            {error && (
+              <div style={{ marginBottom: '12px', color: '#ef4444', fontSize: '13px' }}>
+                {error}
+              </div>
+            )}
             
             <form onSubmit={handleSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '14px'
+              }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--navy)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Employee</label>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#610000', textTransform: 'uppercase', letterSpacing: '.07em' }}>Employee</label>
                   <select
                     name="employee"
                     value={formData.employee}
                     onChange={handleInputChange}
+                    disabled={isSaving}
                     required
-                    style={{ padding: '9px 12px', border: '2px solid #e8dfd6', borderRadius: '8px', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--navy)', background: 'var(--white)', outline: 'none', transition: 'border-color .2s' }}
+                    style={{
+                      padding: '9px 12px',
+                      border: '2px solid #e8dfd6',
+                      borderRadius: '8px',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '13.5px',
+                      color: '#111827',
+                      background: '#FFFFFF',
+                      outline: 'none'
+                    }}
                   >
                     <option value="">Select Employee</option>
                     {employees.map(emp => (
@@ -328,107 +389,200 @@ const HourlyRates = () => {
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--navy)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Billing Rate (₱/hr)</label>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#610000', textTransform: 'uppercase', letterSpacing: '.07em' }}>Billing Rate (₱/hr)</label>
                   <input
                     type="number"
                     name="billingRate"
                     value={formData.billingRate}
                     onChange={handleInputChange}
-                    placeholder="0.00"
-                    step="0.01"
+                    disabled={isSaving}
+                    placeholder="0.000"
+                    step="0.001"
                     min="0"
-                    style={{ padding: '9px 12px', border: '2px solid #e8dfd6', borderRadius: '8px', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--navy)', background: 'var(--white)', outline: 'none', transition: 'border-color .2s' }}
+                    style={{
+                      padding: '9px 12px',
+                      border: '2px solid #e8dfd6',
+                      borderRadius: '8px',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '13.5px',
+                      color: '#111827',
+                      background: '#FFFFFF',
+                      outline: 'none'
+                    }}
                   />
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--navy)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Overtime Rate (₱/hr)</label>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#610000', textTransform: 'uppercase', letterSpacing: '.07em' }}>Overtime Rate (₱/hr)</label>
                   <input
                     type="number"
                     name="overtimeRate"
                     value={formData.overtimeRate}
                     onChange={handleInputChange}
-                    placeholder="0.00"
-                    step="0.01"
+                    disabled={isSaving}
+                    placeholder="0.000"
+                    step="0.001"
                     min="0"
-                    style={{ padding: '9px 12px', border: '2px solid #e8dfd6', borderRadius: '8px', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--navy)', background: 'var(--white)', outline: 'none', transition: 'border-color .2s' }}
+                    style={{
+                      padding: '9px 12px',
+                      border: '2px solid #e8dfd6',
+                      borderRadius: '8px',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '13.5px',
+                      color: '#111827',
+                      background: '#FFFFFF',
+                      outline: 'none'
+                    }}
                   />
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--navy)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Out-of-Town Rate</label>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#610000', textTransform: 'uppercase', letterSpacing: '.07em' }}>Out-of-Town Rate</label>
                   <input
                     type="number"
                     name="outOfTownRate"
                     value={formData.outOfTownRate}
                     onChange={handleInputChange}
-                    placeholder="0.00"
-                    step="0.01"
+                    disabled={isSaving}
+                    placeholder="0.000"
+                    step="0.001"
                     min="0"
-                    style={{ padding: '9px 12px', border: '2px solid #e8dfd6', borderRadius: '8px', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--navy)', background: 'var(--white)', outline: 'none', transition: 'border-color .2s' }}
+                    style={{
+                      padding: '9px 12px',
+                      border: '2px solid #e8dfd6',
+                      borderRadius: '8px',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '13.5px',
+                      color: '#111827',
+                      background: '#FFFFFF',
+                      outline: 'none'
+                    }}
                   />
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--navy)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Cash Advance Limit (₱)</label>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#610000', textTransform: 'uppercase', letterSpacing: '.07em' }}>Cash Advance Limit</label>
                   <input
                     type="number"
                     name="cashAdvanceLimit"
                     value={formData.cashAdvanceLimit}
                     onChange={handleInputChange}
+                    disabled={isSaving}
                     placeholder="0.00"
                     step="0.01"
                     min="0"
-                    style={{ padding: '9px 12px', border: '2px solid #e8dfd6', borderRadius: '8px', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--navy)', background: 'var(--white)', outline: 'none', transition: 'border-color .2s' }}
+                    style={{
+                      padding: '9px 12px',
+                      border: '2px solid #e8dfd6',
+                      borderRadius: '8px',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '13.5px',
+                      color: '#111827',
+                      background: '#FFFFFF',
+                      outline: 'none'
+                    }}
                   />
                 </div>
               </div>
               
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <div style={{
+                display: 'flex',
+                gap: '10px',
+                marginTop: '22px',
+                justifyContent: 'flex-end'
+              }}>
                 <button 
                   type="button" 
-                  onClick={() => setShowModal(false)} 
-                  style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '7px', 
-                    padding: '9px 20px', 
-                    borderRadius: '8px', 
-                    fontFamily: "'DM Sans', sans-serif", 
-                    fontSize: '13.5px', 
-                    fontWeight: '600', 
-                    cursor: 'pointer', 
-                    border: 'none', 
-                    transition: 'all .2s', 
-                    background: 'transparent', 
-                    color: 'var(--red)', 
-                    border: '2px solid var(--red)' 
+                  onClick={closeModal} 
+                  disabled={isSaving}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: '8px',
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: '13.5px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    border: '2px solid #610000',
+                    background: 'transparent',
+                    color: '#610000',
+                    opacity: isSaving ? 0.6 : 1
                   }}
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '7px', 
-                    padding: '9px 20px', 
-                    borderRadius: '8px', 
-                    fontFamily: "'DM Sans', sans-serif", 
-                    fontSize: '13.5px', 
-                    fontWeight: '600', 
-                    cursor: 'pointer', 
-                    border: 'none', 
-                    transition: 'all .2s', 
-                    background: 'var(--red)', 
-                    color: 'var(--white)' 
+                  disabled={isSaving || isFormIncomplete}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: '8px',
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: '13.5px',
+                    fontWeight: '600',
+                    cursor: (isSaving || isFormIncomplete) ? 'not-allowed' : 'pointer',
+                    border: 'none',
+                    background: (isSaving || isFormIncomplete) ? '#ccc' : '#610000',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
                   }}
                 >
-                  {editingId ? 'Update Rate' : 'Set Rate'}
+                  {isSaving && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                  )}
+                  {isSaving ? 'Saving rate...' : (editingId ? 'Update Rate' : 'Set Rate')}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showZeroModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,.55)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '22px',
+            width: '92%',
+            maxWidth: '460px',
+            boxShadow: '0 16px 48px rgba(0,0,0,.25)'
+          }}>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:'18px',fontWeight:700,color:'#132440',marginBottom:'6px'}}>
+              Zero Pay Detected
+            </div>
+            <div style={{fontSize:'13.5px',color:'#4b5563',lineHeight:1.6,marginBottom:'2px'}}>
+              This payslip results in a total pay of 0.
+            </div>
+            <div style={{fontSize:'13.5px',color:'#4b5563',lineHeight:1.6,marginBottom:'14px'}}>
+              Do you want to continue?
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end',gap:'10px'}}>
+              <button
+                onClick={()=>{ setShowZeroModal(false); setPendingPayload(null); }}
+                style={{padding:'9px 16px',borderRadius:'8px',border:'2px solid #610000',background:'transparent',color:'#610000',fontWeight:700}}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={()=> pendingPayload && proceedSave(pendingPayload)}
+                disabled={isSaving}
+                style={{padding:'9px 16px',borderRadius:'8px',border:'none',background:'#610000',color:'#fff',fontWeight:700,opacity:isSaving?0.6:1,cursor:isSaving?'not-allowed':'pointer'}}
+              >
+                Continue
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -4,6 +4,21 @@ import paySlipAPI from '../../api/paySlip.api';
 import employeeRateAPI from '../../api/employeeRate.api';
 import ShimmerLoader from '../../components/ui/ShimmerLoader';
 import { CardShimmer } from '../../components/ui/ShimmerLoader';
+import { getRecentActivities } from '../../utils/activityLog';
+
+const PAYSLIP_DOWNLOAD_COUNTER_KEY = 'payslipDownloadsByMonth';
+
+const getDownloadedPaySlipsCount = (yearValue, monthValue) => {
+  const storageKey = `${yearValue}-${monthValue}`;
+  const raw = localStorage.getItem(PAYSLIP_DOWNLOAD_COUNTER_KEY);
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw);
+    return Number(parsed?.[storageKey]) || 0;
+  } catch {
+    return 0;
+  }
+};
 
 const PayrollDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -32,12 +47,13 @@ const PayrollDashboard = () => {
 
       // Fetch all data in parallel
       const [employeesRes, paySlipsRes, ratesRes] = await Promise.all([
-        employeeAPI.getAllEmployees(),
+        employeeAPI.getAllEmployees({ page: 1, limit: 1 }),
         paySlipAPI.getPaySlips({ limit: 100 }),
         employeeRateAPI.getAllEmployeeRates()
       ]);
 
       const employees = employeesRes?.data?.employees || [];
+      const totalEmployees = employeesRes?.data?.pagination?.total ?? employees.length;
       const paySlips = paySlipsRes?.data?.paySlips || paySlipsRes?.data?.data || [];
       
       // Handle rates data - check different possible structures (same as HourlyRates)
@@ -72,14 +88,10 @@ const PayrollDashboard = () => {
         ? paySlips.filter(ps => ps.month === currentMonth && ps.year === currentYear)
         : [];
 
-      // Get last month payslips for comparison
-      const lastMonthPaySlips = (paySlips && Array.isArray(paySlips)) 
-        ? paySlips.filter(ps => {
-            const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-            const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-            return ps.month === lastMonth && ps.year === lastMonthYear;
-          })
-        : [];
+      const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      const thisMonthDownloadedPaySlips = getDownloadedPaySlipsCount(currentYear, currentMonth);
+      const lastMonthDownloadedPaySlips = getDownloadedPaySlipsCount(lastMonthYear, lastMonth);
 
       // Calculate last month payroll from employee rates (for growth comparison)
       const lastMonthPayroll = (rates && Array.isArray(rates)) 
@@ -106,14 +118,14 @@ const PayrollDashboard = () => {
         return sum;
       }, 0);
 
-      const employeeGrowth = (employees && employees.length > 0) ? "+1" : "0";
+      const employeeGrowth = totalEmployees > 0 ? "+1" : "0";
 
       // Format stats
       const formattedStats = [
         { 
           icon: <PeopleIcon />, 
           lbl: "Total Employees", 
-          val: (employees && employees.length ? employees.length : 0).toString(), 
+          val: totalEmployees.toString(), 
           grow: `${employeeGrowth} This month` 
         },
         { 
@@ -125,8 +137,8 @@ const PayrollDashboard = () => {
         { 
           icon: <DocumentIcon />, 
           lbl: "Payslips Generated", 
-          val: (thisMonthPaySlips && thisMonthPaySlips.length ? thisMonthPaySlips.length : 0).toString(), 
-          grow: `+${Math.max(0, (thisMonthPaySlips && thisMonthPaySlips.length ? thisMonthPaySlips.length : 0) - (lastMonthPaySlips && lastMonthPaySlips.length ? lastMonthPaySlips.length : 0))} This month` 
+          val: thisMonthDownloadedPaySlips.toString(), 
+          grow: `+${Math.max(0, thisMonthDownloadedPaySlips - lastMonthDownloadedPaySlips)} This month` 
         },
       ];
 
@@ -134,7 +146,7 @@ const PayrollDashboard = () => {
       const payrollInfo = {
         totalMonthly: totalMonthlyPayroll,      // Total salary for all employees (full month)
         actualPaid: actualPaidPayroll,          // Actual paid from generated payslips
-        employeeCount: employees ? employees.length : 0
+        employeeCount: totalEmployees
       };
 
       console.log('Payroll calculation:', { 
@@ -142,19 +154,19 @@ const PayrollDashboard = () => {
         actualPaidPayroll, 
         employeeCount: employees ? employees.length : 0,
         thisMonthPaySlips: thisMonthPaySlips.length,
+        thisMonthDownloadedPaySlips,
         rates: rates.length 
       });
 
-      // Generate recent activity from actual data
       const activities = [];
       
-      // Add recent payslip generations
       const recentPaySlips = (paySlips && Array.isArray(paySlips)) 
         ? paySlips.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 3)
         : [];
 
       recentPaySlips.forEach(ps => {
         activities.push({
+          ts: new Date(ps.createdAt || Date.now()).getTime(),
           emp: ps.employee?.firstName && ps.employee?.lastName 
             ? `${ps.employee.firstName} ${ps.employee.lastName}`
             : 'Unknown Employee',
@@ -164,13 +176,13 @@ const PayrollDashboard = () => {
         });
       });
 
-      // Add recent rate updates
       const recentRates = (rates && Array.isArray(rates))
-        ? rates.sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0)).slice(0, 2)
+        ? rates.sort((a, b) => new Date(b.lastUpdated || b.updatedAt || b.createdAt || 0) - new Date(a.lastUpdated || a.updatedAt || a.createdAt || 0)).slice(0, 3)
         : [];
 
       recentRates.forEach(rate => {
         activities.push({
+          ts: new Date(rate.lastUpdated || rate.updatedAt || rate.createdAt || Date.now()).getTime(),
           emp: rate.employee?.firstName && rate.employee?.lastName
             ? `${rate.employee.firstName} ${rate.employee.lastName}`
             : 'Unknown Employee',
@@ -180,10 +192,24 @@ const PayrollDashboard = () => {
         });
       });
 
-      // Sort by date and take top 5
-      const sortedActivities = activities
-        .sort((a, b) => new Date(b.date.split('/').reverse().join('-')) - new Date(a.date.split('/').reverse().join('-')))
-        .slice(0, 5);
+      const localActivities = getRecentActivities().map(a => ({
+        ts: a.ts || Date.now(),
+        emp: a.emp || 'System',
+        date: new Date(a.ts || Date.now()).toLocaleDateString('en-GB'),
+        action: a.action || 'Activity',
+        status: a.status || 'Done'
+      }));
+
+      const merged = [...activities, ...localActivities];
+      const sortedActivities = merged
+        .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+        .slice(0, 5)
+        .map(item => ({
+          emp: item.emp,
+          date: new Date(item.ts || Date.now()).toLocaleDateString('en-GB'),
+          action: item.action,
+          status: item.status
+        }));
 
       setStats(formattedStats);
       setRecentActivity(sortedActivities);

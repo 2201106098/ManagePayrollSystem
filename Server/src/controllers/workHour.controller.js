@@ -155,19 +155,21 @@ const createOrUpdateWorkHour = async (req, res) => {
       });
     }
 
-    const targetDate = new Date(date);
-    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+    const parsedDate = new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
 
-    // Check if work hour already exists
-    const existingWorkHour = await WorkHour.findOne({
-      employee: employeeId,
-      date: { $gte: startOfDay, $lte: endOfDay }
-    });
+    const startOfDay = new Date(parsedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(parsedDate);
+    endOfDay.setHours(23, 59, 59, 999);
 
+    const actorUserId = userId || employee.createdBy || employee._id;
     const workHourData = {
-      employee: employeeId,
-      date: targetDate,
       timeIn: timeIn || '',
       breakTime: breakTime || '',
       resume: resume || '',
@@ -175,27 +177,47 @@ const createOrUpdateWorkHour = async (req, res) => {
       overtime: parseFloat(overtime) || 0,
       status: status || 'present',
       notes: notes || '',
-      lastModifiedBy: userId
+      lastModifiedBy: actorUserId
     };
 
     let workHour;
-    if (existingWorkHour) {
-      workHour = await WorkHour.findByIdAndUpdate(
-        existingWorkHour._id,
-        workHourData,
-        { new: true, runValidators: true }
+    try {
+      workHour = await WorkHour.findOneAndUpdate(
+        {
+          employee: employeeId,
+          date: { $gte: startOfDay, $lte: endOfDay }
+        },
+        {
+          $set: workHourData,
+          $setOnInsert: {
+            employee: employeeId,
+            date: startOfDay,
+            createdBy: actorUserId
+          }
+        },
+        { new: true, upsert: true, runValidators: true }
       ).populate('employee', 'firstName middleInitial lastName idNumber designation');
-    } else {
-      workHourData.createdBy = userId;
-      workHour = new WorkHour(workHourData);
-      await workHour.save();
-      await workHour.populate('employee', 'firstName middleInitial lastName idNumber designation');
+    } catch (e) {
+      if (e && e.code === 11000) {
+        workHour = await WorkHour.findOneAndUpdate(
+          {
+            employee: employeeId,
+            date: { $gte: startOfDay, $lte: endOfDay }
+          },
+          {
+            $set: workHourData
+          },
+          { new: true, runValidators: true }
+        ).populate('employee', 'firstName middleInitial lastName idNumber designation');
+      } else {
+        throw e;
+      }
     }
 
     res.status(200).json({
       success: true,
       data: workHour,
-      message: existingWorkHour ? 'Work hour updated successfully' : 'Work hour created successfully'
+      message: 'Work hour saved successfully'
     });
   } catch (error) {
     console.error('Error creating/updating work hour:', error);

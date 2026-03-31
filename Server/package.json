@@ -10,7 +10,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "create-admin": "node createAdmin.js",
-    "test-admin": "node testAdmin.js"
+    "test-admin": "node testAdmin.js",
+    "seed-employees": "node seedEmployees.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

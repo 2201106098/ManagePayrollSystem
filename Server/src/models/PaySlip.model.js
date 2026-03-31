@@ -76,7 +76,7 @@ const paySlipSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ['present', 'absent', 'halfday_morning', 'halfday_afternoon', 'weekend'],
+      enum: ['present', 'absent', 'halfday_morning', 'halfday_afternoon', 'weekend', 'out_of_town'],
       default: 'present'
     }
   }],
