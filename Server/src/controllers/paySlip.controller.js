@@ -22,7 +22,7 @@ const countOutOfTownDays = (workDays) => {
   return workDays.filter(d => d?.status === 'out_of_town').length;
 };
 
-const computeUndertimeDeduction = (workDays, baseRate, outOfTownRate) => {
+const computeUndertimeDeduction = (workDays, baseRate) => {
   if (!Array.isArray(workDays)) return 0;
   let total = 0;
   for (const d of workDays) {
@@ -33,8 +33,8 @@ const computeUndertimeDeduction = (workDays, baseRate, outOfTownRate) => {
     if (status.startsWith && status.startsWith('halfday')) expected = 4;
     const shortfall = Math.max(0, expected - hours);
     if (shortfall > 0) {
-      const dayRate = status === 'out_of_town' && outOfTownRate > 0 ? outOfTownRate : baseRate;
-      total += shortfall * dayRate;
+      const rate = Number(baseRate) || 0;
+      total += shortfall * rate;
     }
   }
   return total;
@@ -43,6 +43,18 @@ const computeUndertimeDeduction = (workDays, baseRate, outOfTownRate) => {
 const timeToMinutes = (value) => {
   if (!value || typeof value !== 'string') return null;
   const t = value.trim();
+  const isoLikeTime = t.match(/(?:T|\s)(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (isoLikeTime) {
+    const h = Number(isoLikeTime[1]);
+    const m = Number(isoLikeTime[2]);
+    if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
+  }
+  const simpleHm = t.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (simpleHm) {
+    const h = Number(simpleHm[1]);
+    const m = Number(simpleHm[2]);
+    if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
+  }
   const match12 = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (match12) {
     let h = Number(match12[1]);
@@ -66,11 +78,18 @@ const timeToMinutes = (value) => {
 const resolveWorkHourHours = (workHour) => {
   if (!workHour) return 0;
   const savedHours = Number(workHour.totalHours);
+  const directHours = Number(workHour.hours);
+  const workedHours = Number(workHour.workedHours);
+  const hoursWorked = Number(workHour.hoursWorked);
   if (Number.isFinite(savedHours) && savedHours > 0) return savedHours;
+  if (Number.isFinite(directHours) && directHours > 0) return directHours;
+  if (Number.isFinite(workedHours) && workedHours > 0) return workedHours;
+  if (Number.isFinite(hoursWorked) && hoursWorked > 0) return hoursWorked;
   const start = timeToMinutes(workHour.timeIn);
   const end = timeToMinutes(workHour.timeOut);
   if (start !== null && end !== null) {
     let mins = end - start;
+    if (mins < 0) mins += 24 * 60;
     const breakStart = timeToMinutes(workHour.breakTime);
     const breakEnd = timeToMinutes(workHour.resume);
     if (breakStart !== null && breakEnd !== null && breakEnd > breakStart) {
@@ -82,6 +101,24 @@ const resolveWorkHourHours = (workHour) => {
     return 4;
   }
   return 0;
+};
+
+const dateKeyUTC = (dateValue) => {
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const dateKeyLocal = (dateValue) => {
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 // Generate pay slip for an employee for a specific period
@@ -158,10 +195,20 @@ const generatePaySlip = async (req, res, next) => {
       // Continue with work hours fetching using default period
       // Get work hours for this period
       console.log('Fetching work hours for:', { employeeId, startDate, endDate });
+      const queryStart = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+      const queryEnd = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
       const workHours = await WorkHour.find({
         employee: employeeId,
-        date: { $gte: startDate, $lte: endDate }
+        date: { $gte: queryStart, $lte: queryEnd }
       }).sort({ date: 1 });
+      const workHourByUTC = new Map();
+      const workHourByLocal = new Map();
+      workHours.forEach((wh) => {
+        const keyUTC = dateKeyUTC(wh.date);
+        const keyLocal = dateKeyLocal(wh.date);
+        if (keyUTC) workHourByUTC.set(keyUTC, wh);
+        if (keyLocal) workHourByLocal.set(keyLocal, wh);
+      });
       console.log('Found work hours:', workHours.length, 'records');
       console.log('Work hours details:', workHours.map(wh => ({
         date: wh.date,
@@ -179,11 +226,13 @@ const generatePaySlip = async (req, res, next) => {
       while (currentDate <= endDate) {
         // Use UTC date string to avoid timezone mismatch
         const dayOfWeek = new Date(currentDate).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-        const dateStr = currentDate.toISOString().split('T')[0];
-        
-        const workHour = workHours.find(wh =>
-          wh.date.toISOString().split('T')[0] === dateStr
-        );
+        const dateStr = dateKeyUTC(currentDate);
+        const dateStrLocal = dateKeyLocal(currentDate);
+        const workHour = workHourByUTC.get(dateStr) ||
+          workHourByLocal.get(dateStr) ||
+          workHourByUTC.get(dateStrLocal) ||
+          workHourByLocal.get(dateStrLocal) ||
+          null;
         
         if (workHour) {
           console.log(`Found work hour for ${dateStr}:`, {
@@ -252,7 +301,7 @@ const generatePaySlip = async (req, res, next) => {
       }
 
       // Add undertime deduction (hours shortfall from expected hours)
-      const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate, outOfTownRate);
+      const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate);
       if (undertimeAmount > 0) {
         deductions.push({
           type: 'undertime',
@@ -337,10 +386,20 @@ const generatePaySlip = async (req, res, next) => {
     
     // Get work hours for this period
     console.log('Fetching work hours for:', { employeeId, startDate, endDate });
+    const queryStart = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+    const queryEnd = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
     const workHours = await WorkHour.find({
       employee: employeeId,
-      date: { $gte: startDate, $lte: endDate }
+      date: { $gte: queryStart, $lte: queryEnd }
     }).sort({ date: 1 });
+    const workHourByUTC = new Map();
+    const workHourByLocal = new Map();
+    workHours.forEach((wh) => {
+      const keyUTC = dateKeyUTC(wh.date);
+      const keyLocal = dateKeyLocal(wh.date);
+      if (keyUTC) workHourByUTC.set(keyUTC, wh);
+      if (keyLocal) workHourByLocal.set(keyLocal, wh);
+    });
     console.log('Found work hours:', workHours.length, 'records');
     console.log('Work hours details:', workHours.map(wh => ({
       date: wh.date,
@@ -358,11 +417,13 @@ const generatePaySlip = async (req, res, next) => {
     while (currentDate <= endDate) {
       // Use UTC to avoid timezone-induced day shift
       const dayOfWeek = new Date(currentDate).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-      const dateStr = currentDate.toISOString().split('T')[0];
-
-      const workHour = workHours.find(wh =>
-        wh.date.toISOString().split('T')[0] === dateStr
-      );
+      const dateStr = dateKeyUTC(currentDate);
+      const dateStrLocal = dateKeyLocal(currentDate);
+      const workHour = workHourByUTC.get(dateStr) ||
+        workHourByLocal.get(dateStr) ||
+        workHourByUTC.get(dateStrLocal) ||
+        workHourByLocal.get(dateStrLocal) ||
+        null;
       
       if (workHour) {
         console.log(`Found work hour for ${dateStr}:`, {
@@ -436,7 +497,7 @@ const generatePaySlip = async (req, res, next) => {
     }
 
     // Add undertime deduction (hours shortfall from expected hours)
-    const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate, outOfTownRate);
+    const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate);
     if (undertimeAmount > 0) {
       deductions.push({
         type: 'undertime',

@@ -3,6 +3,25 @@ const WorkHourTemplate = require('../models/WorkHourTemplate.model');
 const Employee = require('../models/Employee.model');
 const mongoose = require('mongoose');
 
+const getUtcDayRange = (dateInput) => {
+  const raw = String(dateInput || '');
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let startOfDay;
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  } else {
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    startOfDay = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate(), 0, 0, 0, 0));
+  }
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setUTCHours(23, 59, 59, 999);
+  return { startOfDay, endOfDay };
+};
+
 // Get work hours for a specific date with optional employee filter
 const getWorkHours = async (req, res) => {
   try {
@@ -68,9 +87,14 @@ const getWorkHoursByDate = async (req, res) => {
       });
     }
 
-    const targetDate = new Date(date);
-    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+    const dayRange = getUtcDayRange(date);
+    if (!dayRange) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+    const { startOfDay, endOfDay } = dayRange;
 
     // Get all active employees
     const activeEmployees = await Employee.find({ 
@@ -86,16 +110,18 @@ const getWorkHoursByDate = async (req, res) => {
     // Create a map for quick lookup
     const workHoursMap = new Map();
     existingWorkHours.forEach(wh => {
-      workHoursMap.set(wh.employee._id.toString(), wh);
+      const employeeId = wh?.employee?._id ? wh.employee._id.toString() : (wh?.employee ? String(wh.employee) : null);
+      if (!employeeId) return;
+      workHoursMap.set(employeeId, wh);
     });
 
     // Combine employees with their work hours (or create default entries)
     const result = activeEmployees.map(employee => {
       const existingWorkHour = workHoursMap.get(employee._id.toString());
       if (existingWorkHour) {
-        return existingWorkHour;
+        const workHourObject = existingWorkHour.toObject();
+        return { ...workHourObject, isDefault: false };
       } else {
-        // Return default structure for employees without work hours
         return {
           employee: {
             _id: employee._id,
@@ -106,7 +132,7 @@ const getWorkHoursByDate = async (req, res) => {
             designation: employee.designation,
             name: `${employee.firstName}${employee.middleInitial ? ' ' + employee.middleInitial + '.' : ''} ${employee.lastName}`
           },
-          date: targetDate,
+          date: startOfDay,
           timeIn: '',
           breakTime: '',
           resume: '',
@@ -114,7 +140,8 @@ const getWorkHoursByDate = async (req, res) => {
           overtime: 0,
           totalHours: 0,
           status: 'present',
-          notes: ''
+          notes: '',
+          isDefault: true
         };
       }
     });
@@ -155,18 +182,14 @@ const createOrUpdateWorkHour = async (req, res) => {
       });
     }
 
-    const parsedDate = new Date(date);
-    if (Number.isNaN(parsedDate.getTime())) {
+    const dayRange = getUtcDayRange(date);
+    if (!dayRange) {
       return res.status(400).json({
         success: false,
         message: 'Invalid date format'
       });
     }
-
-    const startOfDay = new Date(parsedDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(parsedDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { startOfDay, endOfDay } = dayRange;
 
     const actorUserId = userId || employee.createdBy || employee._id;
     const workHourData = {
@@ -242,9 +265,14 @@ const bulkUpdateWorkHours = async (req, res) => {
       });
     }
 
-    const targetDate = new Date(date);
-    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+    const dayRange = getUtcDayRange(date);
+    if (!dayRange) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+    const { startOfDay, endOfDay } = dayRange;
 
     const results = [];
     const errors = [];

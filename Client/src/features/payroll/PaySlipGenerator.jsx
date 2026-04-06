@@ -51,6 +51,9 @@ const hasWorkedTime = (day) => {
     day.breakTime ||
     day.resume ||
     (Number(day.hours) || 0) > 0 ||
+    (Number(day.totalHours) || 0) > 0 ||
+    (Number(day.workedHours) || 0) > 0 ||
+    (Number(day.hoursWorked) || 0) > 0 ||
     (Number(day.overtime) || 0) > 0
   );
 };
@@ -58,6 +61,18 @@ const hasWorkedTime = (day) => {
 const parseTimeToMinutes = (value) => {
   if (!value || typeof value !== "string") return null;
   const t = value.trim();
+  const isoLikeTime = t.match(/(?:T|\s)(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (isoLikeTime) {
+    const h = Number(isoLikeTime[1]);
+    const m = Number(isoLikeTime[2]);
+    if (!Number.isNaN(h) && !Number.isNaN(m)) return h * 60 + m;
+  }
+  const simpleHm = t.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (simpleHm) {
+    const h = Number(simpleHm[1]);
+    const m = Number(simpleHm[2]);
+    if (!Number.isNaN(h) && !Number.isNaN(m)) return h * 60 + m;
+  }
   const match12 = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (match12) {
     let h = Number(match12[1]);
@@ -81,13 +96,26 @@ const parseTimeToMinutes = (value) => {
 const getDayHours = (day) => {
   if (!day) return 0;
   const numericHours = Number(day.hours);
+  const numericTotalHours = Number(day.totalHours);
+  const numericWorkedHours = Number(day.workedHours);
+  const numericHoursWorked = Number(day.hoursWorked);
   if (Number.isFinite(numericHours) && numericHours > 0) return numericHours;
+  if (Number.isFinite(numericTotalHours) && numericTotalHours > 0) return numericTotalHours;
+  if (Number.isFinite(numericWorkedHours) && numericWorkedHours > 0) return numericWorkedHours;
+  if (Number.isFinite(numericHoursWorked) && numericHoursWorked > 0) return numericHoursWorked;
   const start = parseTimeToMinutes(day.timeIn);
   const end = parseTimeToMinutes(day.timeOut);
-  if (start === null || end === null) return Number.isFinite(numericHours) ? numericHours : 0;
+  if (start === null || end === null) {
+    if (Number.isFinite(numericHours)) return numericHours;
+    if (Number.isFinite(numericTotalHours)) return numericTotalHours;
+    if (Number.isFinite(numericWorkedHours)) return numericWorkedHours;
+    if (Number.isFinite(numericHoursWorked)) return numericHoursWorked;
+    return 0;
+  }
   const breakStart = parseTimeToMinutes(day.breakTime);
   const breakEnd = parseTimeToMinutes(day.resume);
   let total = end - start;
+  if (total < 0) total += 24 * 60;
   if (breakStart !== null && breakEnd !== null && breakEnd > breakStart) {
     total -= (breakEnd - breakStart);
   }
@@ -155,7 +183,6 @@ function BDTable({ rows, total }) {
    MAIN COMPONENT
 ══════════════════════════════════════════ */
 export default function PaySlipGenerator() {
-  const isDevMode = import.meta.env.DEV;
   const today = new Date();
   const psPageRef = useRef(null);
   const generateRequestIdRef = useRef(0);
@@ -180,7 +207,7 @@ export default function PaySlipGenerator() {
 
   useEffect(()=>{ fetchEmployees(); },[]);
   useEffect(()=>{ if(year&&month!==undefined) fetchPeriods(); },[year,month]);
-  useEffect(()=>{ if(selectedEmployee&&selectedPeriod) generatePaySlip(); },[selectedEmployee,selectedPeriod]);
+  useEffect(()=>{ if(selectedEmployee&&selectedPeriod) generatePaySlip(); },[selectedEmployee,selectedPeriod,year,month]);
   useEffect(()=>{
     const loadRate = async ()=>{
       if(!selectedEmployee?._id){ setCashAdvanceLimit(null); return; }
@@ -242,7 +269,10 @@ export default function PaySlipGenerator() {
           }
         }
         const selectedStillValid = selectedPeriod && list.some(p => p.id === selectedPeriod.id);
-        if (!selectedPeriod || !selectedStillValid) {
+        if (selectedStillValid) {
+          const matched = list.find(p => p.id === selectedPeriod.id);
+          setSelectedPeriod(matched || target);
+        } else {
           setSelectedPeriod(target);
         }
       }
@@ -363,7 +393,7 @@ export default function PaySlipGenerator() {
     }
     return 0;
   })();
-  const undertimeDeduct = isDevMode ? 0 : undertimeDeductRaw;
+  const undertimeDeduct = undertimeDeductRaw;
   const totalAllowances = currentPaySlip?.allowances?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0;
   const totalDeductions = currentPaySlip?.deductions?.reduce((sum, d) => sum + Number(d.amount || 0), 0) || 0;
   const adjustedTotalDeductions = totalDeductions - undertimeDeductRaw + undertimeDeduct;
@@ -428,7 +458,7 @@ export default function PaySlipGenerator() {
       const cell = (x,cy,w,h,str,opts={}) => {
         const {
           align="center", bold=false, size=6, fg=BLK,
-          bg=null, borderB=true, borderR=false, padding=1,
+          bg=null, borderB=false, borderR=false, padding=1,
         } = opts;
         if(bg){ rect(x,cy,w,h,bg); }
         if(borderB){ line(x,cy+h,x+w,cy+h,0.15,GRY); }
@@ -543,17 +573,14 @@ export default function PaySlipGenerator() {
               size:6,
               fg: ri===9 ? NAVY : row.fg,
               bg: bg ? bg : (ri===9?LGY:null),
-              borderB:true,
-              borderR:ci<7,
+              borderB:false,
+              borderR:false,
             });
           }
           cx += cw;
         });
-        line(tfx, y, tfx+TFW, y, 0.1, GRY); // top border
         y += ROW_H;
       });
-      // bottom border of table
-      line(tfx, y, tfx+TFW, y, 0.2, GRY);
 
       /* ── ④ PAY SUMMARY (right of timeframe) ─────────────────────────────── */
       const cashAdvDeduct = cashAdvance.toFixed(2);
@@ -607,7 +634,6 @@ export default function PaySlipGenerator() {
             rect(cx, y, cw, 4, [240,240,240]);
             font("bold",5.5);
             setColor(BLK);
-            line(cx, y+4, cx+cw, y+4, 0.4, GRY);
             text(BD_COLS[ci], ci===0 ? cx+1 : cx+cw/2, y+3, ci===0?"left":"center");
             cx += cw;
           });
@@ -628,7 +654,6 @@ export default function PaySlipGenerator() {
             cells.forEach((val,ci)=>{
               font("normal",5.5);
               setColor(BLK);
-              line(cx, y+3.8, cx+bdColW[ci], y+3.8, 0.1,[220,220,220]);
               text(val, ci===0 ? cx+1 : cx+bdColW[ci]/2, y+3, ci===0?"left":"center");
               cx += bdColW[ci];
             });
@@ -636,7 +661,6 @@ export default function PaySlipGenerator() {
           });
 
           // Total Hours Spent row
-          line(M, y, M+CW, y, 0.3, GRY);
           y += 0.5;
           font("bold",5.5);
           setColor(BLK);
