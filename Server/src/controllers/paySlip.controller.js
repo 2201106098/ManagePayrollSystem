@@ -26,6 +26,7 @@ const computeUndertimeDeduction = (workDays, baseRate) => {
   if (!Array.isArray(workDays)) return 0;
   let total = 0;
   for (const d of workDays) {
+    if (!hasWorkedTime(d)) continue;
     const status = d?.status || 'present';
     const hours = Number(d?.hours || 0);
     let expected = 0;

@@ -430,6 +430,17 @@ export default function RecordWorkHours() {
     });
   }, [empDetailModal.emp, loadEmpMonthData]);
 
+  const pickDetailMonth = useCallback((monthValue) => {
+    if (!monthValue) return;
+    const [pickedYear, pickedMonth] = monthValue.split('-').map(Number);
+    if (Number.isNaN(pickedYear) || Number.isNaN(pickedMonth)) return;
+    const year = pickedYear;
+    const month = pickedMonth - 1;
+    if (month < 0 || month > 11) return;
+    setEmpDetailMonth({ year, month });
+    if (empDetailModal.emp) loadEmpMonthData(empDetailModal.emp, year, month);
+  }, [empDetailModal.emp, loadEmpMonthData]);
+
   const closeEmpDetail = () => {
     setEmpDetailModal({ open: false, emp: null });
     setEmpMonthLogs({});
@@ -1309,6 +1320,7 @@ export default function RecordWorkHours() {
     if (!empDetailModal.open || !empDetailModal.emp) return null;
     const emp   = empDetailModal.emp;
     const { year, month } = empDetailMonth;
+    const monthPickerValue = `${year}-${String(month + 1).padStart(2, "0")}`;
     const empName = emp.name || `${emp.firstName||''} ${emp.middleInitial ? emp.middleInitial+'. ' : ''}${emp.lastName||''}`.trim();
     const initials = empName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1423,10 +1435,24 @@ export default function RecordWorkHours() {
                 Prev
               </button>
               <div style={{display:"flex",alignItems:"center",gap:"8px",color:WHITE}}>
-                <IcoCalendar/>
-                <span style={{fontFamily:"'Playfair Display',serif",fontSize:"17px",fontWeight:"700"}}>
-                  {MONTHS[month]} {year}
-                </span>
+                <input
+                  type="month"
+                  className="month-picker-white"
+                  value={monthPickerValue}
+                  onChange={(e)=>pickDetailMonth(e.target.value)}
+                  style={{
+                    fontFamily:"'Playfair Display',serif",
+                    fontSize:"15px",
+                    fontWeight:"700",
+                    color:WHITE,
+                    background:"rgba(255,255,255,.08)",
+                    border:"1px solid rgba(255,255,255,.25)",
+                    borderRadius:"8px",
+                    padding:"6px 10px",
+                    outline:"none",
+                    cursor:"pointer"
+                  }}
+                />
               </div>
               <button onClick={()=>changeDetailMonth(1)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:"8px",padding:"6px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px",color:WHITE,fontSize:"13px",fontWeight:"600"}}>
                 Next
@@ -1691,6 +1717,7 @@ export default function RecordWorkHours() {
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
         .emp-name-link:hover { text-decoration:underline !important; color:#610000 !important; }
+        .month-picker-white::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 1; }
       `}</style>
 
       {/* ── TOAST ── */}

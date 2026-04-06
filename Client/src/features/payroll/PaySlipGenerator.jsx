@@ -138,11 +138,11 @@ const isWeekendDate = (dateValue) => {
 
 /* ── BREAKDOWN TABLE (screen) ── */
 function BDTable({ rows, total }) {
-  const th = { fontWeight:"700", background:"#f0f0f0", padding:"1px 3px",
-    borderBottom:"1.5px solid #888", textAlign:"center", fontSize:"5pt",
+  const th = { fontWeight:"400", background:"#f0f0f0", padding:"1px 3px",
+    borderBottom:"0.5px solid #000", textAlign:"center", fontSize:"5pt",
     fontFamily:"Arial,sans-serif", color:"#000" };
   const td = (left) => ({ padding:"1px 3px", textAlign:left?"left":"center",
-    borderBottom:"1px solid #eee", fontSize:"5pt", fontFamily:"Arial,sans-serif" });
+    borderBottom:"0.5px solid #000", fontSize:"5pt", fontFamily:"Arial,sans-serif", color:"#000" });
   return (
     <table style={{ borderCollapse:"collapse", width:"100%", marginBottom:"4px" }}>
       <thead>
@@ -167,10 +167,10 @@ function BDTable({ rows, total }) {
           </tr>
         ))}
         <tr>
-          <td colSpan="5" style={{...td(false),textAlign:"right",fontWeight:"700",borderTop:"1px solid #bbb",borderBottom:"none",paddingTop:"3px"}}>
+          <td colSpan="5" style={{...td(false),textAlign:"right",fontWeight:"400",borderTop:"0.5px solid #000",borderBottom:"none",paddingTop:"3px"}}>
             Total Hours Spent
           </td>
-          <td style={{...td(false),fontWeight:"700",borderTop:"1px solid #bbb",borderBottom:"none",paddingTop:"3px"}}>
+          <td style={{...td(false),fontWeight:"400",borderTop:"0.5px solid #000",borderBottom:"none",paddingTop:"3px"}}>
             {total}
           </td>
         </tr>
@@ -458,11 +458,11 @@ export default function PaySlipGenerator() {
       const cell = (x,cy,w,h,str,opts={}) => {
         const {
           align="center", bold=false, size=6, fg=BLK,
-          bg=null, borderB=false, borderR=false, padding=1,
+          bg=null, borderB=false, borderR=false, borderColor=GRY, padding=1,
         } = opts;
         if(bg){ rect(x,cy,w,h,bg); }
-        if(borderB){ line(x,cy+h,x+w,cy+h,0.15,GRY); }
-        if(borderR){ line(x+w,cy,x+w,cy+h,0.15,GRY); }
+        if(borderB){ line(x,cy+h,x+w,cy+h,0.2,borderColor); }
+        if(borderR){ line(x+w,cy,x+w,cy+h,0.15,borderColor); }
         font(bold?"bold":"normal",size);
         setColor(fg);
         const tx = align==="center" ? x+w/2 : align==="right" ? x+w-padding : x+padding;
@@ -573,8 +573,9 @@ export default function PaySlipGenerator() {
               size:6,
               fg: ri===9 ? NAVY : row.fg,
               bg: bg ? bg : (ri===9?LGY:null),
-              borderB:false,
+              borderB:true,
               borderR:false,
+              borderColor:NAVY,
             });
           }
           cx += cw;
@@ -632,7 +633,8 @@ export default function PaySlipGenerator() {
           let cx = M;
           bdColW.forEach((cw,ci)=>{
             rect(cx, y, cw, 4, [240,240,240]);
-            font("bold",5.5);
+            line(cx, y + 4, cx + cw, y + 4, 0.08, BLK);
+            font("normal",5.5);
             setColor(BLK);
             text(BD_COLS[ci], ci===0 ? cx+1 : cx+cw/2, y+3, ci===0?"left":"center");
             cx += cw;
@@ -655,6 +657,7 @@ export default function PaySlipGenerator() {
               font("normal",5.5);
               setColor(BLK);
               text(val, ci===0 ? cx+1 : cx+bdColW[ci]/2, y+3, ci===0?"left":"center");
+              line(cx, y + 3.8, cx + bdColW[ci], y + 3.8, 0.08, BLK);
               cx += bdColW[ci];
             });
             y += 3.8;
@@ -662,7 +665,8 @@ export default function PaySlipGenerator() {
 
           // Total Hours Spent row
           y += 0.5;
-          font("bold",5.5);
+          line(M, y, M+CW, y, 0.08, BLK);
+          font("normal",5.5);
           setColor(BLK);
           text("Total Hours Spent", M+CW - bdColW[bdColW.length-1] - 2, y+3, "right");
           text(totals[bi], M+CW, y+3, "right");
