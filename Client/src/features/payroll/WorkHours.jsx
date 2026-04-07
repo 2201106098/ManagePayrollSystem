@@ -206,16 +206,38 @@ export default function RecordWorkHours() {
     const cacheKey = 'employees';
     const cached = apiCache.get(cacheKey);
     if (cached) { setEmployees(cached); return; }
+    const extractEmployees = (payload) => {
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.employees)) return payload.employees;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (Array.isArray(payload?.data?.employees)) return payload.data.employees;
+      return [];
+    };
+    const normalizeActiveEmployees = (list) =>
+      (Array.isArray(list) ? list : []).filter(emp => {
+        if (!emp || emp.isArchived === true) return false;
+        if (typeof emp.status === 'string') {
+          const status = emp.status.toLowerCase();
+          return status === 'active';
+        }
+        if (typeof emp.isActive === 'boolean') return emp.isActive;
+        return true;
+      });
     const maxRetries = 3;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const response = await employeeAPI.getAllEmployees({ status: 'active', limit: 100 });
-        if (response.success && response.data) {
-          const employeesData = Array.isArray(response.data) ? response.data : response.data.employees || [];
-          setEmployees(employeesData);
-          apiCache.set(cacheKey, employeesData);
-          return;
+        if (response?.success === false) throw new Error(response?.message || 'Failed to fetch employees');
+        let employeesData = normalizeActiveEmployees(extractEmployees(response?.data ?? response));
+        if (employeesData.length === 0) {
+          const fallbackResponse = await employeeAPI.getAllEmployees({ limit: 200, showArchived: false });
+          if (fallbackResponse?.success === false) throw new Error(fallbackResponse?.message || 'Failed to fetch employees');
+          employeesData = normalizeActiveEmployees(extractEmployees(fallbackResponse?.data ?? fallbackResponse));
         }
+        setEmployees(employeesData);
+        apiCache.set(cacheKey, employeesData);
+        setError('');
+        return;
       } catch (err) {
         if (err.response?.status === 429 && attempt < maxRetries - 1) {
           const retryDelay = Math.min(1000 * Math.pow(2, attempt), 5000);
