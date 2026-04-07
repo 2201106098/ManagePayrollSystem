@@ -4,11 +4,7 @@ const logger = require('../utils/logger');
 
 const register = async (req, res, next) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
-    
-    const result = await authService.register({ email, password, firstName, lastName });
-    
-    res.status(201).json(createResponse(true, 'User registered successfully', result));
+    res.status(403).json(createResponse(false, 'Registration is disabled. Only pre-created accounts in the database are allowed.'));
   } catch (error) {
     logger.error('Registration error:', error);
     next(error);

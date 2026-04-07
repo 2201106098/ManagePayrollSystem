@@ -435,7 +435,7 @@ export default function PaySlipGenerator() {
       const NAVY = [ 26, 58,143];   // #1a3a8f (blue used for PAYSLIP title / total hrs)
       const BLK  = [  0,  0,  0];
       const GRY  = [136,136,136];
-      const LGY  = [240,240,240];   // light grey bg
+      const LGRY = [210,210,210];
 
       let y = M;
 
@@ -461,7 +461,7 @@ export default function PaySlipGenerator() {
           bg=null, borderB=false, borderR=false, borderColor=GRY, padding=1,
         } = opts;
         if(bg){ rect(x,cy,w,h,bg); }
-        if(borderB){ line(x,cy+h,x+w,cy+h,0.2,borderColor); }
+        if(borderB){ line(x,cy+h,x+w,cy+h,0.1,borderColor); }
         if(borderR){ line(x+w,cy,x+w,cy+h,0.15,borderColor); }
         font(bold?"bold":"normal",size);
         setColor(fg);
@@ -540,7 +540,7 @@ export default function PaySlipGenerator() {
         { cells: WEEK3_DAY_NAMES,         bold:true,  bg:null,  fg:BLK },
         { cells: buildTFRow(tableData.week3Dates, 6, "Weekly Total Hours"), bold:true,  bg:null,  fg:BLK },
         { cells: buildTFRow(tableData.week3Hours, 6, tableData.weekSubtotals[2]), bold:false, bg:null, fg:BLK },
-        { cells: buildTotRow(tableData.totals[2]),    bold:true,  bg:LGY,   fg:NAVY },
+        { cells: buildTotRow(tableData.totals[2]),    bold:true,  bg:null,  fg:NAVY },
       ];
 
       function buildTFRow(dates, count, tail=""){
@@ -556,6 +556,7 @@ export default function PaySlipGenerator() {
 
       tfRows.forEach((row, ri) => {
         let cx = tfx;
+        if(ri===9){ line(tfx, y, tfx+TFW, y, 0.1, LGRY); }
         // left label
         font(LEFT_BOLD[ri]?"bold":"normal", 6.5);
         setColor(LEFT_BLUE[ri]?NAVY:BLK);
@@ -563,19 +564,21 @@ export default function PaySlipGenerator() {
         // timeframe cells
         row.cells.forEach((cellVal,ci)=>{
           const cw = colWidths[ci];
-          const isSpacer = ci===6;
+          const isSpacer = ci===6 && ri!==9;
           if(!isSpacer){
             const isTotal = ci===7;
+            const isWeeklyTotalLabel = ci===7 && (ri===1 || ri===4 || ri===7);
+            const isGrandTotalValue  = ri===9 && ci===7;
             const bg = row.bg ?? null;
             cell(cx, y, cw, ROW_H, cellVal, {
               align:"center",
               bold:row.bold||(isTotal&&ri>=2),
-              size:6,
-              fg: ri===9 ? NAVY : row.fg,
-              bg: bg ? bg : (ri===9?LGY:null),
+              size:isGrandTotalValue?7.5:6,
+              fg: ri===9 ? NAVY : (isWeeklyTotalLabel ? NAVY : row.fg),
+              bg,
               borderB:true,
               borderR:false,
-              borderColor:NAVY,
+              borderColor:LGRY,
             });
           }
           cx += cw;
