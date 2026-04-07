@@ -144,7 +144,9 @@ const generatePaySlip = async (req, res, next) => {
     }
 
     // Get employee billing rate from HourlyRates (EmployeeRate collection)
-    const employeeRateDoc = await EmployeeRate.findOne({ employee: employeeId });
+    const employeeRateDoc = await EmployeeRate.findOne({ employee: employeeId })
+      .select('billingRate overtimeRate outOfTownRate')
+      .lean();
     const employeeRateValue = Number(employeeRateDoc?.billingRate);
     const employeeHourlyValue = Number(employee.hourlyRate);
     const fallbackRateValue = Number(employee.basicRate ? employee.basicRate / 160 : 0);
@@ -168,7 +170,7 @@ const generatePaySlip = async (req, res, next) => {
       year: parseInt(year),
       month: parseInt(month),
       isActive: true
-    });
+    }).lean();
     console.log('Found period settings:', periodSettings);
     
     if (!periodSettings) {
@@ -201,7 +203,10 @@ const generatePaySlip = async (req, res, next) => {
       const workHours = await WorkHour.find({
         employee: employeeId,
         date: { $gte: queryStart, $lte: queryEnd }
-      }).sort({ date: 1 });
+      })
+        .select('date timeIn breakTime resume timeOut overtime totalHours status')
+        .sort({ date: 1 })
+        .lean();
       const workHourByUTC = new Map();
       const workHourByLocal = new Map();
       workHours.forEach((wh) => {
@@ -211,13 +216,6 @@ const generatePaySlip = async (req, res, next) => {
         if (keyLocal) workHourByLocal.set(keyLocal, wh);
       });
       console.log('Found work hours:', workHours.length, 'records');
-      console.log('Work hours details:', workHours.map(wh => ({
-        date: wh.date,
-        timeIn: wh.timeIn,
-        timeOut: wh.timeOut,
-        totalHours: wh.totalHours,
-        status: wh.status
-      })));
       
       // Process work days (same logic as before)
       const workDays = [];
@@ -348,8 +346,6 @@ const generatePaySlip = async (req, res, next) => {
         status: 'draft'
       };
       
-      console.log('Creating payslip data with default period:', payslipData);
-      
       const payslip = await PaySlip.findOneAndUpdate(
         {
           employee: employeeId,
@@ -392,7 +388,10 @@ const generatePaySlip = async (req, res, next) => {
     const workHours = await WorkHour.find({
       employee: employeeId,
       date: { $gte: queryStart, $lte: queryEnd }
-    }).sort({ date: 1 });
+    })
+      .select('date timeIn breakTime resume timeOut overtime totalHours status')
+      .sort({ date: 1 })
+      .lean();
     const workHourByUTC = new Map();
     const workHourByLocal = new Map();
     workHours.forEach((wh) => {
@@ -402,13 +401,6 @@ const generatePaySlip = async (req, res, next) => {
       if (keyLocal) workHourByLocal.set(keyLocal, wh);
     });
     console.log('Found work hours:', workHours.length, 'records');
-    console.log('Work hours details:', workHours.map(wh => ({
-      date: wh.date,
-      timeIn: wh.timeIn,
-      timeOut: wh.timeOut,
-      totalHours: wh.totalHours,
-      status: wh.status
-    })));
     
     // Process work days
     const workDays = [];
@@ -543,8 +535,6 @@ const generatePaySlip = async (req, res, next) => {
       createdBy: userId,
       status: 'draft'
     };
-    
-    console.log('Creating payslip data:', payslipData);
     
     const payslip = await PaySlip.findOneAndUpdate(
       {

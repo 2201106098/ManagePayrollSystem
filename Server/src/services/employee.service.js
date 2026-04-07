@@ -9,7 +9,8 @@ const getAllEmployees = async (filters = {}) => {
       limit = 10,
       search = '',
       showArchived = false,
-      status = 'active'
+      status = 'active',
+      fields = ''
     } = filters;
 
     const query = {
@@ -31,12 +32,17 @@ const getAllEmployees = async (filters = {}) => {
 
     const skip = (page - 1) * limit;
     
+    const selectFields = typeof fields === 'string' && fields.trim() ? fields.split(',').join(' ') : null;
+    const baseQuery = Employee.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    if (selectFields) baseQuery.select(selectFields);
+    if (!selectFields || selectFields.includes('createdBy')) {
+      baseQuery.populate('createdBy', 'firstName lastName email');
+    }
     const [employees, total] = await Promise.all([
-      Employee.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('createdBy', 'firstName lastName email'),
+      baseQuery.lean(),
       Employee.countDocuments(query)
     ]);
 

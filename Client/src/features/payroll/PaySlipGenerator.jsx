@@ -7,6 +7,7 @@ import { FormShimmer } from "../../components/ui/ShimmerLoader";
 import ShimmerLoader from "../../components/ui/ShimmerLoader";
 import employeeRateAPI from "../../api/employeeRate.api";
 import { addActivity } from "../../utils/activityLog";
+import { useDebounce } from "../../hooks/useDebounce";
 
 /* ── CONSTANTS ── */
 const MONTHS = [
@@ -186,6 +187,7 @@ export default function PaySlipGenerator() {
   const today = new Date();
   const psPageRef = useRef(null);
   const generateRequestIdRef = useRef(0);
+  const generateAbortRef = useRef(null);
 
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedPeriod,   setSelectedPeriod]   = useState(null);
@@ -207,7 +209,9 @@ export default function PaySlipGenerator() {
 
   useEffect(()=>{ fetchEmployees(); },[]);
   useEffect(()=>{ if(year&&month!==undefined) fetchPeriods(); },[year,month]);
-  useEffect(()=>{ if(selectedEmployee&&selectedPeriod) generatePaySlip(); },[selectedEmployee,selectedPeriod,year,month]);
+  const genKey = `${selectedEmployee?._id||""}-${selectedPeriod?.id||""}-${year}-${month}`;
+  const debouncedGenKey = useDebounce(genKey, 350);
+  useEffect(()=>{ if(selectedEmployee&&selectedPeriod) generatePaySlip(); },[debouncedGenKey]);
   useEffect(()=>{
     const loadRate = async ()=>{
       if(!selectedEmployee?._id){ setCashAdvanceLimit(null); return; }
@@ -228,7 +232,7 @@ export default function PaySlipGenerator() {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const r = await employeeAPI.getAllEmployees({ page: 1, limit: 1000, status: 'active', showArchived: false });
+      const r = await employeeAPI.getAllEmployees({ page: 1, limit: 1000, status: 'active', showArchived: false, fields: '_id,firstName,middleInitial,lastName' });
       let data = [];
       if(r.success&&r.data) data = Array.isArray(r.data)?r.data:(r.data.employees??r.data.data??[]);
       setEmployees(data);
@@ -286,10 +290,13 @@ export default function PaySlipGenerator() {
     try {
       if(!silent) setLoading(true);
       setError(null);
+      if (generateAbortRef.current) generateAbortRef.current.abort();
+      const ctrl = new AbortController();
+      generateAbortRef.current = ctrl;
       const r = await paySlipAPI.generatePaySlip({
         employeeId:selectedEmployee._id, year, month,
         periodId:selectedPeriod.id, cashAdvance:cashAdvance||0,
-      });
+      }, { signal: ctrl.signal, timeout: 30000 });
       if (requestId !== generateRequestIdRef.current) return;
       if(r.success&&r.data) setCurrentPaySlip(r.data);
       else if(r._id)        setCurrentPaySlip(r);
@@ -300,6 +307,7 @@ export default function PaySlipGenerator() {
       addActivity({ emp: empName || 'Employee', action: 'Pay Slip Generated', status: 'Done' });
     } catch(e){
       if (requestId !== generateRequestIdRef.current) return;
+      if (e?.code === 'ERR_CANCELED') return;
       if(e.data?._id) setCurrentPaySlip(e.data);
       else setError(e.message||'Failed to generate payslip');
     } finally{
@@ -427,7 +435,7 @@ export default function PaySlipGenerator() {
 
       // ── A4 landscape (297 × 210 mm) ──────────────────────────────────────
       const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
-      const PW = 297, PH = 210;  // page dims
+      const PW = 297;
       const M  = 10;             // left / right margin
       const CW = PW - M*2;      // content width  = 277
 
@@ -543,16 +551,16 @@ export default function PaySlipGenerator() {
         { cells: buildTotRow(tableData.totals[2]),    bold:true,  bg:null,  fg:NAVY },
       ];
 
-      function buildTFRow(dates, count, tail=""){
+      const buildTFRow = (dates, count, tail="") => {
         const row = [...dates];
         while (row.length < count) row.push("");
-        while (row.length < 7) row.push(""); // ensure index 6 is spacer for alignment
-        row.push(tail || "");                // index 7: label or total value
+        while (row.length < 7) row.push("");
+        row.push(tail || "");
         return row;
-      }
-      function buildTotRow(grand){
+      };
+      const buildTotRow = (grand) => {
         return ["","","","","","","Grand Total Hours",grand];
-      }
+      };
 
       tfRows.forEach((row, ri) => {
         let cx = tfx;

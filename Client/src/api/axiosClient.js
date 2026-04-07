@@ -36,8 +36,8 @@ export const API_BASE_URL = apiBaseUrl;
 
 const axiosClient = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 10000,
-  withCredentials: true, // Important for cookies
+  timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -199,6 +199,9 @@ axiosClient.interceptors.response.use(
     return response.data;
   },
   async (error) => {
+    if (axios.isCancel?.(error) || error.code === 'ERR_CANCELED') {
+      return Promise.reject(error);
+    }
     const { response, config } = error;
     
     if (response) {
@@ -247,7 +250,11 @@ axiosClient.interceptors.response.use(
           toast.error(response.data?.message || 'An error occurred');
       }
     } else if (error.request) {
-      toast.error('Network error. Please check your connection.');
+      if (error.code === 'ECONNABORTED') {
+        toast.error('Request timed out. Please try again.');
+      } else {
+        toast.error('Network error. Please check your connection.');
+      }
     } else {
       toast.error('An unexpected error occurred.');
     }

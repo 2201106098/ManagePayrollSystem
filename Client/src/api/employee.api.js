@@ -10,6 +10,7 @@ export const employeeAPI = {
     if (params.search) queryParams.append('search', params.search);
     if (params.showArchived !== undefined) queryParams.append('showArchived', params.showArchived);
     if (params.status) queryParams.append('status', params.status);
+    if (params.fields) queryParams.append('fields', params.fields);
     
     const url = `/employees${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     return await axiosClient.get(url);

@@ -1,12 +1,15 @@
 import axiosClient from './axiosClient';
 
 const paySlipAPI = {
-  // Generate new pay slip
-  generatePaySlip: async (data) => {
+  generatePaySlip: async (data, config = {}) => {
     try {
-      const response = await axiosClient.post('/pay-slips/generate', data);
+      const merged = { timeout: 30000, ...config };
+      const response = await axiosClient.post('/pay-slips/generate', data, merged);
       return response.data;
     } catch (error) {
+      if (error.code === 'ERR_CANCELED') {
+        throw error;
+      }
       throw error.response?.data || { message: 'Failed to generate pay slip' };
     }
   },

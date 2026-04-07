@@ -9,7 +9,8 @@ const getAllEmployees = async (req, res, next) => {
       limit = 10,
       search = '',
       showArchived = false,
-      status = 'active'
+      status = 'active',
+      fields = ''
     } = req.query;
 
     const filters = {
@@ -17,7 +18,8 @@ const getAllEmployees = async (req, res, next) => {
       limit: parseInt(limit),
       search,
       showArchived: showArchived === 'true',
-      status
+      status,
+      fields
     };
 
     const result = await employeeService.getAllEmployees(filters);
