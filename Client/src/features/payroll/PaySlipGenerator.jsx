@@ -96,6 +96,7 @@ const parseTimeToMinutes = (value) => {
 
 const getDayHours = (day) => {
   if (!day) return 0;
+  if (day?.status === 'out_of_town') return 0;
   const numericHours = Number(day.hours);
   const numericTotalHours = Number(day.totalHours);
   const numericWorkedHours = Number(day.workedHours);
@@ -125,6 +126,7 @@ const getDayHours = (day) => {
 
 // Total hours rendered (base hours + overtime) for display-only purposes
 const getDayRenderedHours = (day) => {
+  if (day?.status === 'out_of_town') return 0;
   const base = getDayHours(day);
   const ot = Number(day?.overtime || 0);
   return base + (Number.isFinite(ot) ? ot : 0);
@@ -388,10 +390,9 @@ export default function PaySlipGenerator() {
     return 0;
   })();
   const effectiveBasicPay = (() => {
+    if (effectiveHourlyRate > 0 && workDaysTotalHours >= 0) return effectiveHourlyRate * workDaysTotalHours;
     const basic = Number(currentPaySlip?.basicPay || 0);
-    if (basic > 0) return basic;
-    if (effectiveHourlyRate > 0 && workDaysTotalHours > 0) return effectiveHourlyRate * workDaysTotalHours;
-    return 0;
+    return basic > 0 ? basic : 0;
   })();
   const undertimeDeductRaw = (() => {
     if (currentPaySlip?.deductions?.length) {
@@ -401,11 +402,34 @@ export default function PaySlipGenerator() {
     }
     return 0;
   })();
-  const undertimeDeduct = undertimeDeductRaw;
+  const undertimeDeduct = (() => {
+    if (!currentPaySlip?.workDays || effectiveHourlyRate <= 0) return undertimeDeductRaw;
+    let total = 0;
+    for (const d of currentPaySlip.workDays) {
+      const status = d?.status || 'present';
+      let expected = 0;
+      if (status === 'present') expected = 8;
+      else if (status && status.startsWith('halfday')) expected = 4;
+      else if (status === 'out_of_town') expected = 0;
+      const hrs = getDayHours(d);
+      const shortfall = Math.max(0, expected - hrs);
+      if (shortfall > 0) total += shortfall * effectiveHourlyRate;
+    }
+    return total;
+  })();
   const totalAllowances = currentPaySlip?.allowances?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0;
   const totalDeductions = currentPaySlip?.deductions?.reduce((sum, d) => sum + Number(d.amount || 0), 0) || 0;
   const adjustedTotalDeductions = totalDeductions - undertimeDeductRaw + undertimeDeduct;
-  const effectiveOvertimePay = Number(currentPaySlip?.overtimePay || 0);
+  const effectiveOvertimePay = (() => {
+    if (!currentPaySlip?.workDays) return Number(currentPaySlip?.overtimePay || 0);
+    const otRate = effectiveHourlyRate > 0 ? effectiveHourlyRate * 1.25 : null;
+    if (otRate === null) return Number(currentPaySlip?.overtimePay || 0);
+    const otSum = currentPaySlip.workDays.reduce((s, d) => {
+      if (d?.status === 'out_of_town') return s;
+      return s + (Number(d?.overtime || 0) * otRate);
+    }, 0);
+    return otSum;
+  })();
   const effectiveGrossPay = effectiveBasicPay + effectiveOvertimePay + totalAllowances;
   const effectiveNetPay = effectiveGrossPay - adjustedTotalDeductions;
   const effectiveNetPayAfterCashAdvance = effectiveNetPay - cashAdvance;
