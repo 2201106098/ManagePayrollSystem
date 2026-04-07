@@ -298,6 +298,7 @@ export default function PaySlipGenerator() {
       const r = await paySlipAPI.generatePaySlip({
         employeeId:selectedEmployee._id, year, month,
         periodId:selectedPeriod.id, cashAdvance:cashAdvance||0,
+        autoUndertime: false,
       }, { signal: ctrl.signal, timeout: 30000 });
       if (requestId !== generateRequestIdRef.current) return;
       if(r.success&&r.data) setCurrentPaySlip(r.data);
@@ -389,8 +390,6 @@ export default function PaySlipGenerator() {
   const effectiveHourlyRate = (() => {
     const rate = Number(currentPaySlip?.hourlyRate || 0);
     if (rate > 0) return rate;
-    const basic = Number(currentPaySlip?.basicPay || 0);
-    if (basic > 0 && workDaysTotalHours > 0) return basic / workDaysTotalHours;
     return 0;
   })();
   const effectiveBasicPay = (() => {
@@ -406,22 +405,7 @@ export default function PaySlipGenerator() {
     }
     return 0;
   })();
-  const undertimeDeduct = (() => {
-    if (noWorkedData) return 0;
-    if (!currentPaySlip?.workDays || effectiveHourlyRate <= 0) return undertimeDeductRaw;
-    let total = 0;
-    for (const d of currentPaySlip.workDays) {
-      const status = d?.status || 'present';
-      let expected = 0;
-      if (status === 'present') expected = 8;
-      else if (status && status.startsWith('halfday')) expected = 4;
-      else if (status === 'out_of_town') expected = 0;
-      const hrs = getDayHours(d);
-      const shortfall = Math.max(0, expected - hrs);
-      if (shortfall > 0) total += shortfall * effectiveHourlyRate;
-    }
-    return total;
-  })();
+  const undertimeDeduct = undertimeDeductRaw;
   const totalAllowances = noWorkedData
     ? 0
     : (currentPaySlip?.allowances?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0);

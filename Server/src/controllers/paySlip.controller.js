@@ -125,7 +125,7 @@ const dateKeyLocal = (dateValue) => {
 // Generate pay slip for an employee for a specific period
 const generatePaySlip = async (req, res, next) => {
   try {
-    const { employeeId, year, month, periodId } = req.body;
+    const { employeeId, year, month, periodId, autoUndertime = false } = req.body;
     const userId = req.user?.userId;
     
     console.log('Generating payslip with:', { employeeId, year, month, periodId, userId });
@@ -300,13 +300,15 @@ const generatePaySlip = async (req, res, next) => {
       }
 
       // Add undertime deduction (hours shortfall from expected hours)
-      const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate);
-      if (undertimeAmount > 0) {
-        deductions.push({
-          type: 'undertime',
-          amount: undertimeAmount,
-          description: 'Undertime based on hours shortfall'
-        });
+      if (autoUndertime === true) {
+        const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate);
+        if (undertimeAmount > 0) {
+          deductions.push({
+            type: 'undertime',
+            amount: undertimeAmount,
+            description: 'Undertime based on hours shortfall'
+          });
+        }
       }
 
       // Manually compute totals
@@ -490,13 +492,15 @@ const generatePaySlip = async (req, res, next) => {
     }
 
     // Add undertime deduction (hours shortfall from expected hours)
-    const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate);
-    if (undertimeAmount > 0) {
-      deductions.push({
-        type: 'undertime',
-        amount: undertimeAmount,
-        description: 'Undertime based on hours shortfall'
-      });
+    if (autoUndertime === true) {
+      const undertimeAmount = computeUndertimeDeduction(workDays, hourlyRate);
+      if (undertimeAmount > 0) {
+        deductions.push({
+          type: 'undertime',
+          amount: undertimeAmount,
+          description: 'Undertime based on hours shortfall'
+        });
+      }
     }
 
     // Manually compute totals (findOneAndUpdate bypasses pre-save middleware)
