@@ -1,11 +1,37 @@
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
-const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const normalizeApiUrl = (value) => {
+  if (!value || typeof value !== 'string') return '';
+  return value.trim().replace(/\/+$/, '');
+};
+
+const ensureApiPath = (value) => {
+  if (!value) return '';
+  try {
+    const parsed = new URL(value);
+    if (!parsed.pathname || parsed.pathname === '/') {
+      parsed.pathname = '/api';
+    } else if (!parsed.pathname.endsWith('/api')) {
+      parsed.pathname = `${parsed.pathname.replace(/\/+$/, '')}/api`;
+    }
+    return normalizeApiUrl(parsed.toString());
+  } catch {
+    return normalizeApiUrl(value);
+  }
+};
+
 const defaultApiUrl = import.meta.env.PROD
   ? 'https://managepayrollsystem.onrender.com/api'
   : 'http://localhost:5000/api';
-const apiBaseUrl = configuredApiUrl || defaultApiUrl;
+
+const configuredApiUrl = ensureApiPath(import.meta.env.VITE_API_URL);
+const shouldIgnoreConfiguredUrl =
+  import.meta.env.PROD &&
+  configuredApiUrl.includes('netlify.app');
+const apiBaseUrl = shouldIgnoreConfiguredUrl
+  ? defaultApiUrl
+  : (configuredApiUrl || defaultApiUrl);
 export const API_BASE_URL = apiBaseUrl;
 
 const axiosClient = axios.create({
