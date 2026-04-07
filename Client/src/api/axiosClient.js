@@ -1,9 +1,14 @@
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
-// Create base axios instance
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const defaultApiUrl = import.meta.env.PROD
+  ? 'https://managepayrollsystem.onrender.com/api'
+  : 'http://localhost:5000/api';
+const apiBaseUrl = configuredApiUrl || defaultApiUrl;
+
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: apiBaseUrl,
   timeout: 10000,
   withCredentials: true, // Important for cookies
   headers: {

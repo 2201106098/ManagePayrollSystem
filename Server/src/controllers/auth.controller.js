@@ -2,6 +2,14 @@ const authService = require('../services/auth.service');
 const { createResponse } = require('../utils/response');
 const logger = require('../utils/logger');
 
+const isProduction = process.env.NODE_ENV === 'production';
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? 'none' : 'lax',
+  maxAge: 7 * 24 * 60 * 60 * 1000
+};
+
 const register = async (req, res, next) => {
   try {
     res.status(403).json(createResponse(false, 'Registration is disabled. Only pre-created accounts in the database are allowed.'));
@@ -20,12 +28,7 @@ const login = async (req, res, next) => {
     const result = await authService.login({ email, password });
     
     // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    res.cookie('refreshToken', result.refreshToken, refreshCookieOptions);
     
     // Remove refresh token from response body for security
     const { refreshToken, ...responseWithoutRefreshToken } = result;
@@ -48,12 +51,7 @@ const refreshToken = async (req, res, next) => {
     const result = await authService.refreshToken(refreshToken);
     
     // Set new refresh token in httpOnly cookie
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    res.cookie('refreshToken', result.refreshToken, refreshCookieOptions);
     
     // Remove refresh token from response body for security
     const { refreshToken: newRefreshToken, ...responseWithoutRefreshToken } = result;
@@ -74,7 +72,7 @@ const logout = async (req, res, next) => {
     }
     
     // Clear refresh token cookie
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', refreshCookieOptions);
     
     res.json(createResponse(true, 'Logout successful'));
   } catch (error) {
@@ -92,7 +90,7 @@ const logoutAll = async (req, res, next) => {
     }
     
     // Clear refresh token cookie
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', refreshCookieOptions);
     
     res.json(createResponse(true, 'Logged out from all devices successfully'));
   } catch (error) {

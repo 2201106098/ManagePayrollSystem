@@ -4,6 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  VITE_API_URL = "https://managepayrollsystem.onrender.com/api"
 
 # SPA fallback — all routes serve index.html
 [[redirects]]
