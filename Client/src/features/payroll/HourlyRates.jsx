@@ -32,14 +32,38 @@ const HourlyRates = () => {
     try {
       setLoading(true);
       setError('');
+      const extractEmployees = (payload) => {
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload?.employees)) return payload.employees;
+        if (Array.isArray(payload?.data)) return payload.data;
+        if (Array.isArray(payload?.data?.employees)) return payload.data.employees;
+        return [];
+      };
+      const normalizeActiveEmployees = (list) =>
+        (Array.isArray(list) ? list : []).filter(emp => {
+          if (!emp || emp.isArchived === true) return false;
+          if (typeof emp.status === 'string') return emp.status.toLowerCase() === 'active';
+          if (typeof emp.isActive === 'boolean') return emp.isActive;
+          return true;
+        });
       
       const [employeesResponse, ratesResponse] = await Promise.all([
         employeeAPI.getAllEmployees({ status: 'active', limit: 100 }),
         employeeRateAPI.getAllEmployeeRates({ limit: 100 })
       ]);
       
-      // Handle employee data
-      const employeesData = employeesResponse.data?.employees || employeesResponse.data || [];
+      if (employeesResponse?.success === false) {
+        throw new Error(employeesResponse?.message || 'Failed to fetch employees');
+      }
+
+      let employeesData = normalizeActiveEmployees(extractEmployees(employeesResponse?.data ?? employeesResponse));
+      if (employeesData.length === 0) {
+        const fallbackEmployeesResponse = await employeeAPI.getAllEmployees({ limit: 200, showArchived: false });
+        if (fallbackEmployeesResponse?.success === false) {
+          throw new Error(fallbackEmployeesResponse?.message || 'Failed to fetch employees');
+        }
+        employeesData = normalizeActiveEmployees(extractEmployees(fallbackEmployeesResponse?.data ?? fallbackEmployeesResponse));
+      }
       setEmployees(employeesData);
       
       // Handle rates data - check different possible structures
