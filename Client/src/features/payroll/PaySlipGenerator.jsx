@@ -724,11 +724,22 @@ export default function PaySlipGenerator() {
       text(approvedName, M+85+23, y, "left");
       const nameW = doc.getTextWidth(approvedName);
       line(M+85+23, y+0.5, M+85+23+nameW, y+0.5, 0.3, BLK);
+      // second approver (EVP)
+      const secondX = M + 85 + 85;
+      font("bold",7);
+      setColor(BLK);
+      text("Approved By:", secondX, y, "left");
+      const vpName = "Emmanuel A. Reonal";
+      font("bold",7);
+      text(vpName, secondX+23, y, "left");
+      const vpW = doc.getTextWidth(vpName);
+      line(secondX+23, y+0.5, secondX+23+vpW, y+0.5, 0.3, BLK);
 
       y += 5;
       font("normal",6.5);
       setColor(BLK);
       text("President/CEO", M+110, y, "left");
+      text("EVP / Vice President", (M + 85 + 85) + 25, y, "left");
 
       y += 6;
       font("bold",7);
@@ -1010,8 +1021,13 @@ export default function PaySlipGenerator() {
               <div style={{display:"flex",gap:"50px",marginBottom:"2px"}}>
                 <div><strong>Prepared By:</strong>&nbsp;&nbsp;{(preparedBy && preparedBy.trim()) ? preparedBy.trim() : employeeName}</div>
                 <div><strong>Approved By:</strong>&nbsp;&nbsp;<u><strong>Joel V. Agsaoay</strong></u></div>
+                <div><strong>Approved By:</strong>&nbsp;&nbsp;<u><strong>Emmanuel A. Reonal</strong></u></div>
               </div>
-              <div style={{marginLeft:"200px",fontSize:"6.5pt",marginBottom:"8px"}}>President/CEO</div>
+              <div style={{display:"flex",gap:"50px",marginBottom:"8px"}}>
+                <div style={{minWidth:"170px"}}/>
+                <div style={{fontSize:"6.5pt"}}>President/CEO</div>
+                <div style={{fontSize:"6.5pt"}}>EVP / Vice President</div>
+              </div>
               <div><strong>Received By:</strong>&nbsp;&nbsp;{employeeName}</div>
             </div>
 
