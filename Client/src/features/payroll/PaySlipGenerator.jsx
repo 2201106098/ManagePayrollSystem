@@ -203,11 +203,12 @@ export default function PaySlipGenerator() {
   const [error,      setError]      = useState(null);
   const [hovPrint,   setHovPrint]   = useState(false);
   const [cashAdvance,setCashAdvance]= useState(0);
+  const [subsidy,    setSubsidy]    = useState(0);
   const [preparedBy, setPreparedBy] = useState('');
   const [cashAdvanceLimit, setCashAdvanceLimit] = useState(null);
   const [showCALimitModal, setShowCALimitModal] = useState(false);
 
-  const resetCashAdvance = () => { setCashAdvance(0); setCurrentPaySlip(null); };
+  const resetCashAdvance = () => { setCashAdvance(0); setSubsidy(0); setCurrentPaySlip(null); };
 
   useEffect(()=>{ fetchEmployees(); },[]);
   useEffect(()=>{ if(year&&month!==undefined) fetchPeriods(); },[year,month]);
@@ -423,8 +424,9 @@ export default function PaySlipGenerator() {
     return otSum;
   })();
   const effectiveGrossPay = effectiveBasicPay + effectiveOvertimePay + totalAllowances;
+  const subsidyValue = Number(subsidy || 0);
   const effectiveNetPay = effectiveGrossPay - adjustedTotalDeductions;
-  const effectiveNetPayAfterCashAdvance = effectiveNetPay - cashAdvance;
+  const effectiveNetPayAfterCashAdvance = effectiveNetPay + subsidyValue - cashAdvance;
   const employeeName = selectedEmployee
     ? `${selectedEmployee.firstName||""} ${selectedEmployee.middleInitial?selectedEmployee.middleInitial+". ":""}${selectedEmployee.lastName||""}`
     : "Employee";
@@ -619,6 +621,7 @@ export default function PaySlipGenerator() {
         { label:"Basic Pay",               value:`P${effectiveBasicPay.toFixed(2)}`,                 labelRed:true,  valueRed:false },
         { label:"Undertime Deduction",     value:`P${undertimeDeduct.toFixed(2)}`,                 labelRed:true,  valueRed:true  },
         { label:"Cash Advance Deduction",  value:`P${cashAdvDeduct}`,                              labelRed:true,  valueRed:true  },
+        { label:"Subsidy",                 value:`P${subsidyValue.toFixed(2)}`,                    labelRed:false, valueRed:false },
         { label:"Total Out of Town",       value:`P${outOfTownTotal.toFixed(2)}`,                  labelRed:false, valueRed:false },
         { label:"Net Pay",                 value:`P${netPayVal.toFixed(2)}`,                       labelRed:false, valueRed:false, netPay:true },
       ];
@@ -776,6 +779,10 @@ export default function PaySlipGenerator() {
     }
     setCashAdvance(val);
   };
+  const handleSubsidyChange = (e) => {
+    const val = parseFloat(e.target.value) || 0;
+    setSubsidy(val);
+  };
 
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif", display:"flex", gap:"18px", alignItems:"flex-start", flexWrap:"nowrap", overflowX:"auto" }}>
@@ -838,6 +845,11 @@ export default function PaySlipGenerator() {
                 onChange={handleCashAdvanceChange} placeholder="0.00" min="0" step="0.01"/>
             </div>
             <div style={fgStyle}>
+              <label style={lblStyle}>Subsidy</label>
+              <input type="number" style={{...selStyle,width:"100%"}} value={subsidy}
+                onChange={handleSubsidyChange} placeholder="0.00" min="0" step="0.01"/>
+            </div>
+            <div style={fgStyle}>
               <label style={lblStyle}>Prepared By</label>
               <input
                 type="text"
@@ -855,11 +867,12 @@ export default function PaySlipGenerator() {
                   ["Rate",     `P${effectiveHourlyRate.toFixed(2)}/hr`],
                   ["Basic Pay",`P${effectiveBasicPay.toFixed(2)}`],
                   ["Cash Adv", `P${cashAdvance.toFixed(2)}`],
+                  ["Subsidy",  `P${subsidyValue.toFixed(2)}`],
                   ["Net Pay",  `P${effectiveNetPayAfterCashAdvance.toFixed(2)}`],
                 ].map(([l,v],i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:"2px"}}>
                     <span style={{color:"#6b7280"}}>{l}</span>
-                    <span style={{fontWeight:"700",color:i===4?RED_CSS:NAVY_CSS}}>{v}</span>
+                    <span style={{fontWeight:"700",color:l==="Net Pay"?RED_CSS:NAVY_CSS}}>{v}</span>
                   </div>
                 ))}
               </div>
@@ -973,6 +986,7 @@ export default function PaySlipGenerator() {
                     <tr><td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"7pt",whiteSpace:"nowrap"}}>Basic Pay</td><td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",fontSize:"7pt",whiteSpace:"nowrap"}}>P{effectiveBasicPay.toFixed(2)}</td></tr>
                     <tr><td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"7pt",whiteSpace:"nowrap"}}>Undertime Deduction</td><td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"7pt",whiteSpace:"nowrap"}}>P{undertimeDeduct.toFixed(2)}</td></tr>
                     <tr><td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"7pt",whiteSpace:"nowrap"}}>Cash Advance Deduction</td><td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"7pt",whiteSpace:"nowrap"}}>P{cashAdvance.toFixed(2)}</td></tr>
+                    <tr><td style={{textAlign:"left",padding:"2px 2px",fontSize:"7pt",whiteSpace:"nowrap"}}>Subsidy</td><td style={{textAlign:"right",padding:"2px 2px",fontSize:"7pt",whiteSpace:"nowrap"}}>P{subsidyValue.toFixed(2)}</td></tr>
                     <tr><td style={{textAlign:"left",padding:"2px 2px",fontSize:"7pt",whiteSpace:"nowrap"}}>Total Out of Town</td><td style={{textAlign:"right",padding:"2px 2px",fontSize:"7pt",whiteSpace:"nowrap"}}>P{outOfTownTotal.toFixed(2)}</td></tr>
                     <tr style={{borderTop:"1px solid #888"}}><td style={{textAlign:"left",padding:"3px 2px 0",fontSize:"8pt",whiteSpace:"nowrap"}}>Net Pay</td><td style={{textAlign:"right",padding:"3px 2px 0",fontWeight:"900",fontSize:"9pt",whiteSpace:"nowrap"}}>P{effectiveNetPayAfterCashAdvance.toFixed(2)}</td></tr>
                   </tbody>
