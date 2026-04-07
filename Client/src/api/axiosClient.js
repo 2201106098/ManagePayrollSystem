@@ -6,6 +6,7 @@ const defaultApiUrl = import.meta.env.PROD
   ? 'https://managepayrollsystem.onrender.com/api'
   : 'http://localhost:5000/api';
 const apiBaseUrl = configuredApiUrl || defaultApiUrl;
+export const API_BASE_URL = apiBaseUrl;
 
 const axiosClient = axios.create({
   baseURL: apiBaseUrl,

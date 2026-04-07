@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authAPI } from '../api/auth.api';
-import { setAccessToken, clearAccessToken, checkAndRefreshToken, getAccessToken } from '../api/axiosClient';
+import { setAccessToken, clearAccessToken, checkAndRefreshToken, getAccessToken, API_BASE_URL } from '../api/axiosClient';
 import { toast } from 'react-hot-toast';
 
 const AuthContext = createContext();
@@ -249,7 +249,7 @@ export const AuthProvider = ({ children }) => {
           // If refresh failed, try a direct refresh token call
           console.log('Direct token refresh attempt...');
           try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh`, {
+            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
               method: 'POST',
               credentials: 'include',
               headers: {
