@@ -19,31 +19,40 @@ connectDB();
 app.use(helmet());
 
 // CORS configuration
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  // Support additional comma-separated origins via ALLOWED_ORIGINS env var
-  ...(process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',')
-        .map(o => o.trim())
-        .filter(Boolean)
-    : []),
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5173'
-].filter(Boolean);
+const normalizeOrigin = (value = '') => value.trim().replace(/\/$/, '');
+const allowedOrigins = new Set(
+  [
+    process.env.CLIENT_URL,
+    'https://managementtesting.netlify.app',
+    ...(process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+      : []),
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+  ]
+    .filter(Boolean)
+    .map(normalizeOrigin)
+);
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (curl, mobile apps, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (allowedOrigins.has(normalizedOrigin)) {
       return callback(null, true);
     }
+    logger.warn(`CORS blocked origin: ${origin}`);
     return callback(new Error(`CORS: origin '${origin}' not allowed`));
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Rate limiting
 app.use(apiLimiter);
