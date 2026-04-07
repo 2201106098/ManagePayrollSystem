@@ -26,9 +26,11 @@ const defaultApiUrl = import.meta.env.PROD
   : 'http://localhost:5000/api';
 
 const configuredApiUrl = ensureApiPath(import.meta.env.VITE_API_URL);
+const isLocalhostOrigin = typeof window !== 'undefined' &&
+  /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(window.location.origin || '');
 const shouldIgnoreConfiguredUrl =
-  import.meta.env.PROD &&
-  configuredApiUrl.includes('netlify.app');
+  (import.meta.env.PROD && configuredApiUrl.includes('netlify.app')) ||
+  (!import.meta.env.PROD && isLocalhostOrigin && configuredApiUrl.includes('netlify.app'));
 const apiBaseUrl = shouldIgnoreConfiguredUrl
   ? defaultApiUrl
   : (configuredApiUrl || defaultApiUrl);

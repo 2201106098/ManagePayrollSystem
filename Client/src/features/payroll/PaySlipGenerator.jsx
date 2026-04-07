@@ -382,6 +382,10 @@ export default function PaySlipGenerator() {
 
   const tableData    = formatWorkDaysForTable();
   const workDaysTotalHours = currentPaySlip?.workDays?.reduce((sum, day) => sum + getDayHours(day), 0) || 0;
+  const hasAnyWorked = Array.isArray(currentPaySlip?.workDays)
+    ? currentPaySlip.workDays.some(d => hasWorkedTime(d) && d?.status !== 'out_of_town')
+    : false;
+  const noWorkedData = !hasAnyWorked;
   const effectiveHourlyRate = (() => {
     const rate = Number(currentPaySlip?.hourlyRate || 0);
     if (rate > 0) return rate;
@@ -390,9 +394,9 @@ export default function PaySlipGenerator() {
     return 0;
   })();
   const effectiveBasicPay = (() => {
-    if (effectiveHourlyRate > 0 && workDaysTotalHours >= 0) return effectiveHourlyRate * workDaysTotalHours;
-    const basic = Number(currentPaySlip?.basicPay || 0);
-    return basic > 0 ? basic : 0;
+    if (noWorkedData) return 0;
+    if (effectiveHourlyRate > 0 && workDaysTotalHours > 0) return effectiveHourlyRate * workDaysTotalHours;
+    return 0;
   })();
   const undertimeDeductRaw = (() => {
     if (currentPaySlip?.deductions?.length) {
@@ -403,6 +407,7 @@ export default function PaySlipGenerator() {
     return 0;
   })();
   const undertimeDeduct = (() => {
+    if (noWorkedData) return 0;
     if (!currentPaySlip?.workDays || effectiveHourlyRate <= 0) return undertimeDeductRaw;
     let total = 0;
     for (const d of currentPaySlip.workDays) {
@@ -417,10 +422,13 @@ export default function PaySlipGenerator() {
     }
     return total;
   })();
-  const totalAllowances = currentPaySlip?.allowances?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0;
+  const totalAllowances = noWorkedData
+    ? 0
+    : (currentPaySlip?.allowances?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0);
   const totalDeductions = currentPaySlip?.deductions?.reduce((sum, d) => sum + Number(d.amount || 0), 0) || 0;
   const adjustedTotalDeductions = totalDeductions - undertimeDeductRaw + undertimeDeduct;
   const effectiveOvertimePay = (() => {
+    if (noWorkedData) return 0;
     if (!currentPaySlip?.workDays) return Number(currentPaySlip?.overtimePay || 0);
     const otRate = effectiveHourlyRate > 0 ? effectiveHourlyRate * 1.25 : null;
     if (otRate === null) return Number(currentPaySlip?.overtimePay || 0);
