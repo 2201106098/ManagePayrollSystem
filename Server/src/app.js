@@ -19,14 +19,29 @@ connectDB();
 app.use(helmet());
 
 // CORS configuration
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  // Support additional comma-separated origins via ALLOWED_ORIGINS env var
+  ...(process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+        .map(o => o.trim())
+        .filter(Boolean)
+    : []),
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173'
+].filter(Boolean);
+
 app.use(cors({
-  origin: [
-    process.env.CLIENT_URL,
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173'
-  ].filter(Boolean),
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, mobile apps, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   credentials: true
 }));
 
