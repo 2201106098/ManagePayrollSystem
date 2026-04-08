@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import jsPDF from "jspdf";
+ import { useState, useEffect, useRef } from "react";
 import { employeeAPI } from "../../api/employee.api";
 import paySlipAPI from "../../api/paySlip.api";
 import periodSettingsAPI from "../../api/periodSettings.api";
@@ -140,7 +139,7 @@ const isWeekendDate = (dateValue) => {
 };
 
 /* ── BREAKDOWN TABLE (screen) ── */
-function BDTable({ rows, total }) {
+function BDTable({ rows, total, onRemarkChange }) {
   const th = { fontWeight:"400", background:"#f0f0f0", padding:"1px 3px",
     borderBottom:"0.5px solid #000", textAlign:"center", fontSize:"5pt",
     fontFamily:"Arial,sans-serif", color:"#000" };
@@ -151,11 +150,12 @@ function BDTable({ rows, total }) {
       <thead>
         <tr>
           <th style={{...th,textAlign:"left",width:"12%"}}>Day</th>
-          <th style={{...th,width:"19%"}}>Time-In (PST)</th>
-          <th style={{...th,width:"17%"}}>Break</th>
-          <th style={{...th,width:"17%"}}>Resume</th>
-          <th style={{...th,width:"19%"}}>Time-Out (PST)</th>
-          <th style={{...th,width:"16%"}}>Total Hours</th>
+          <th style={{...th,width:"17%"}}>Time-In (PST)</th>
+          <th style={{...th,width:"14%"}}>Break</th>
+          <th style={{...th,width:"14%"}}>Resume</th>
+          <th style={{...th,width:"17%"}}>Time-Out (PST)</th>
+          <th style={{...th,width:"13%"}}>Total Hours</th>
+          <th style={{...th,width:"13%"}}>Remarks</th>
         </tr>
       </thead>
       <tbody>
@@ -167,15 +167,27 @@ function BDTable({ rows, total }) {
             <td style={td(false)}>{r.res}</td>
             <td style={td(false)}>{r.to}</td>
             <td style={td(false)}>{r.hrs}</td>
+            <td style={{...td(false), textAlign:"left"}}>
+              <input
+                type="text"
+                value={r.rmk||""}
+                onChange={(e)=>onRemarkChange && onRemarkChange(r.id, e.target.value)}
+                className="remark-input"
+                style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:"4px", padding:"2px 4px", fontSize:"6.5pt", fontFamily:"Arial,sans-serif" }}
+                placeholder=""
+              />
+            </td>
           </tr>
         ))}
         <tr>
-          <td colSpan="5" style={{...td(false),textAlign:"right",fontWeight:"400",borderTop:"0.5px solid #000",borderBottom:"none",paddingTop:"3px"}}>
+          <td colSpan="4" style={{...td(false),borderTop:"0.5px solid #000",borderBottom:"none",padding:"0"}} />
+          <td style={{...td(false),textAlign:"right",fontWeight:"700",borderTop:"0.5px solid #000",borderBottom:"none",padding:"0 3px",lineHeight:1.1,whiteSpace:"nowrap"}}>
             Total Hours Spent
           </td>
-          <td style={{...td(false),fontWeight:"400",borderTop:"0.5px solid #000",borderBottom:"none",paddingTop:"3px"}}>
+          <td style={{...td(false),textAlign:"right",fontWeight:"700",borderTop:"0.5px solid #000",borderBottom:"none",padding:"0 3px",lineHeight:1.1,whiteSpace:"nowrap"}}>
             {total}
           </td>
+          <td style={{...td(false),borderTop:"0.5px solid #000",borderBottom:"none",padding:"0"}} />
         </tr>
       </tbody>
     </table>
@@ -207,6 +219,7 @@ export default function PaySlipGenerator() {
   const [preparedBy, setPreparedBy] = useState('');
   const [cashAdvanceLimit, setCashAdvanceLimit] = useState(null);
   const [showCALimitModal, setShowCALimitModal] = useState(false);
+  const [remarksByDate, setRemarksByDate] = useState({});
 
   const resetCashAdvance = () => { setCashAdvance(0); setSubsidy(0); setCurrentPaySlip(null); };
 
@@ -452,8 +465,11 @@ export default function PaySlipGenerator() {
       setPdfLoading(true);
 
       // ── A4 landscape (297 × 210 mm) ──────────────────────────────────────
-      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+      const jspdfModule = await import("jspdf");
+      const JsPDF = jspdfModule.jsPDF || jspdfModule.default;
+      const doc = new JsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
       const PW = 297;
+      const PH = 210;
       const M  = 10;             // left / right margin
       const CW = PW - M*2;      // content width  = 277
 
@@ -478,6 +494,12 @@ export default function PaySlipGenerator() {
         setFill(fillRgb);
         if(strokeRgb){ setDraw(strokeRgb); doc.rect(x,rx,rw,rh,"FD"); }
         else doc.rect(x,rx,rw,rh,"F");
+      };
+      const ensureSpace = (neededHeight = 0) => {
+        if (y + neededHeight > PH - M) {
+          doc.addPage();
+          y = M;
+        }
       };
 
       // ── cell draw helper (table cell with optional bg, borders on bottom) ─
@@ -546,6 +568,16 @@ export default function PaySlipGenerator() {
       // column definitions (matching screen: 13,13,13,11,11,11,5,13 %)
       const COL_PCT   = [0.13,0.13,0.13,0.11,0.11,0.11,0.05,0.13];
       const colWidths = COL_PCT.map(p => p * TFW);
+      const buildTFRow = (dates, count, tail="") => {
+        const row = [...dates];
+        while (row.length < count) row.push("");
+        while (row.length < 7) row.push("");
+        row.push(tail || "");
+        return row;
+      };
+      const buildTotRow = (grand) => {
+        return ["","","","","","","Grand Total Hours",grand];
+      };
       const WEEK1_DAY_NAMES = buildTFRow(tableData.week1DayLabels, 5);
       const WEEK2_DAY_NAMES = buildTFRow(tableData.week2DayLabels, 6);
       const WEEK3_DAY_NAMES = buildTFRow(tableData.week3DayLabels, 6);
@@ -568,17 +600,6 @@ export default function PaySlipGenerator() {
         { cells: buildTFRow(tableData.week3Hours, 6, tableData.weekSubtotals[2]), bold:false, bg:null, fg:BLK },
         { cells: buildTotRow(tableData.totals[2]),    bold:true,  bg:null,  fg:NAVY },
       ];
-
-      const buildTFRow = (dates, count, tail="") => {
-        const row = [...dates];
-        while (row.length < count) row.push("");
-        while (row.length < 7) row.push("");
-        row.push(tail || "");
-        return row;
-      };
-      const buildTotRow = (grand) => {
-        return ["","","","","","","Grand Total Hours",grand];
-      };
 
       tfRows.forEach((row, ri) => {
         let cx = tfx;
@@ -654,26 +675,36 @@ export default function PaySlipGenerator() {
         const blocks   = tableData.breakdownBlocks;
         const totals   = [tableData.totals[0], tableData.totals[1]];
 
-        const BD_COLS  = ["Day","Time-In (PST)","Break","Resume","Time-Out (PST)","Total Hours"];
-        const BD_PCT   = [0.15,0.20,0.16,0.16,0.20,0.13];
+        const BD_COLS  = ["Day","Time-In (PST)","Break","Resume","Time-Out (PST)","Total Hours","Remarks"];
+        const BD_PCT   = [0.13,0.17,0.13,0.13,0.17,0.12,0.15];
         const bdColW   = BD_PCT.map(p=>p*CW);
 
         blocks.forEach((block, bi)=>{
-          // header row
-          let cx = M;
-          bdColW.forEach((cw,ci)=>{
-            rect(cx, y, cw, 4, [240,240,240]);
-            line(cx, y + 4, cx + cw, y + 4, 0.08, BLK);
-            font("normal",5.5);
-            setColor(BLK);
-            text(BD_COLS[ci], ci===0 ? cx+1 : cx+cw/2, y+3, ci===0?"left":"center");
-            cx += cw;
-          });
-          y += 4;
+          const drawBlockHeader = () => {
+            let cxh = M;
+            bdColW.forEach((cw,ci)=>{
+              rect(cxh, y, cw, 4, [240,240,240]);
+              line(cxh, y + 4, cxh + cw, y + 4, 0.08, BLK);
+              font("normal",5.5);
+              setColor(BLK);
+              text(BD_COLS[ci], cxh+cw/2, y+3, "center");
+              cxh += cw;
+            });
+            y += 4;
+          };
+          ensureSpace(8);
+          drawBlockHeader();
 
-          // data rows
           block.forEach((day)=>{
+            ensureSpace(5);
+            if (y + 5 > PH - M) {
+              doc.addPage();
+              y = M;
+              drawBlockHeader();
+            }
             const hasTime = hasWorkedTime(day) && day.status!=="absent";
+            const key = new Date(day.date).toISOString().slice(0,10);
+            const remark = (remarksByDate && remarksByDate[key]) ? String(remarksByDate[key]) : "";
             const cells = [
               day.dayOfWeek||"",
               hasTime ? formatTime12(day.timeIn)  : "",
@@ -681,30 +712,42 @@ export default function PaySlipGenerator() {
               hasTime ? formatTime12(day.resume)||""   : "",
               hasTime ? formatTime12(day.timeOut)||""  : "",
               hasTime ? getDayRenderedHours(day).toFixed(2) : "",
+              remark
             ];
-            cx = M;
+            let cx = M;
             cells.forEach((val,ci)=>{
               font("normal",5.5);
               setColor(BLK);
-              text(val, ci===0 ? cx+1 : cx+bdColW[ci]/2, y+3, ci===0?"left":"center");
+              const tx = cx + bdColW[ci]/2;
+              text(val, tx, y+3, "center");
               line(cx, y + 3.8, cx + bdColW[ci], y + 3.8, 0.08, BLK);
               cx += bdColW[ci];
             });
             y += 3.8;
           });
 
-          // Total Hours Spent row
-          y += 0.5;
+          ensureSpace(5);
+          y += 0.15;
           line(M, y, M+CW, y, 0.08, BLK);
           font("normal",5.5);
           setColor(BLK);
-          text("Total Hours Spent", M+CW - bdColW[bdColW.length-1] - 2, y+3, "right");
-          text(totals[bi], M+CW, y+3, "right");
-          y += 5;
+          const timeOutLeft = M + bdColW.slice(0, 4).reduce((a,b)=>a+b,0);
+          const timeOutRight = timeOutLeft + bdColW[4];
+          const totalHoursLeft = timeOutRight;
+          const totalHoursRight = totalHoursLeft + bdColW[5];
+          const remarksDividerX = totalHoursRight;
+          font("bold",5.5);
+          text("Total Hours Spent", timeOutRight - 1, y+2.6, "right");
+          text(totals[bi], totalHoursRight - 1, y+2.6, "right");
+          line(totalHoursLeft, y, totalHoursLeft, y + 3.2, 0.08, BLK);
+          line(remarksDividerX, y, remarksDividerX, y + 3.2, 0.08, BLK);
+          line(M, y + 3.2, M + CW, y + 3.2, 0.08, BLK);
+          y += 3.5;
         });
       }
 
       /* ── ⑦ SIGNATURES ───────────────────────────────────────────────────── */
+      ensureSpace(20);
       y += 4;
       line(M, y, M+CW, y, 0.2, GRY);
       y += 5;
@@ -738,8 +781,10 @@ export default function PaySlipGenerator() {
       y += 5;
       font("normal",6.5);
       setColor(BLK);
-      text("President/CEO", M+110, y, "left");
-      text("EVP / Vice President", (M + 85 + 85) + 25, y, "left");
+      const presCenterX = (M + 85 + 23) + (nameW / 2);
+      text("President/CEO", presCenterX, y, "center");
+      const vpCenterX = (secondX + 23) + (vpW / 2);
+      text("EVP / Vice President", vpCenterX, y, "center");
 
       y += 6;
       font("bold",7);
@@ -793,6 +838,9 @@ export default function PaySlipGenerator() {
   const handleSubsidyChange = (e) => {
     const val = parseFloat(e.target.value) || 0;
     setSubsidy(val);
+  };
+  const handleRemarkChange = (id, text) => {
+    setRemarksByDate(prev => ({ ...prev, [id]: text }));
   };
 
   return (
@@ -910,7 +958,7 @@ export default function PaySlipGenerator() {
             </button>
           </>
         )}
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}} @media print{.remark-input{border:none !important;background:transparent !important;box-shadow:none !important;outline:none !important;padding:0 !important;}}`}</style>
       </div>
 
       {/* ══ PAYSLIP DOCUMENT (screen) ══ */}
@@ -1010,23 +1058,64 @@ export default function PaySlipGenerator() {
             {currentPaySlip.workDays && (() => {
               return (
                 <>
-                  <BDTable rows={tableData.breakdownBlocks[0].map(d=>{ const h=hasWorkedTime(d)&&d.status!=="absent"; return {day:d.dayOfWeek,ti:h?formatTime12(d.timeIn):"",brk:h?formatTime12(d.breakTime)||"":"",res:h?formatTime12(d.resume)||"":"",to:h?formatTime12(d.timeOut)||"":"",hrs:h?getDayHours(d).toFixed(2):""}; })} total={tableData.totals[0]}/>
-                  <BDTable rows={tableData.breakdownBlocks[1].map(d=>{ const h=hasWorkedTime(d)&&d.status!=="absent"; return {day:d.dayOfWeek,ti:h?formatTime12(d.timeIn):"",brk:h?formatTime12(d.breakTime)||"":"",res:h?formatTime12(d.resume)||"":"",to:h?formatTime12(d.timeOut)||"":"",hrs:h?getDayHours(d).toFixed(2):""}; })} total={tableData.totals[1]}/>
+                  <BDTable
+                    rows={tableData.breakdownBlocks[0].map(d=>{
+                      const h=hasWorkedTime(d)&&d.status!=="absent";
+                      const key = new Date(d.date).toISOString().slice(0,10);
+                      return {
+                        id:key,
+                        day:d.dayOfWeek,
+                        ti:h?formatTime12(d.timeIn):"",
+                        brk:h?formatTime12(d.breakTime)||"":"",
+                        res:h?formatTime12(d.resume)||"":"",
+                        to:h ? (formatTime12(d.timeOut) || "") : "",
+                        hrs:h?getDayHours(d).toFixed(2):"",
+                        rmk: remarksByDate[key] || ""
+                      };
+                    })}
+                    total={tableData.totals[0]}
+                    onRemarkChange={handleRemarkChange}
+                  />
+                  <BDTable
+                    rows={tableData.breakdownBlocks[1].map(d=>{
+                      const h=hasWorkedTime(d)&&d.status!=="absent";
+                      const key = new Date(d.date).toISOString().slice(0,10);
+                      return {
+                        id:key,
+                        day:d.dayOfWeek,
+                        ti:h?formatTime12(d.timeIn):"",
+                        brk:h?formatTime12(d.breakTime)||"":"",
+                        res:h?formatTime12(d.resume)||"":"",
+                        to:h ? (formatTime12(d.timeOut) || "") : "",
+                        hrs:h?getDayHours(d).toFixed(2):"",
+                        rmk: remarksByDate[key] || ""
+                      };
+                    })}
+                    total={tableData.totals[1]}
+                    onRemarkChange={handleRemarkChange}
+                  />
                 </>
               );
             })()}
 
             {/* Signatures */}
             <div style={{marginTop:"12px",fontSize:"7pt"}}>
-              <div style={{display:"flex",gap:"50px",marginBottom:"2px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",columnGap:"50px",alignItems:"start",marginBottom:"8px"}}>
                 <div><strong>Prepared By:</strong>&nbsp;&nbsp;{(preparedBy && preparedBy.trim()) ? preparedBy.trim() : employeeName}</div>
-                <div><strong>Approved By:</strong>&nbsp;&nbsp;<u><strong>Joel V. Agsaoay</strong></u></div>
-                <div><strong>Approved By:</strong>&nbsp;&nbsp;<u><strong>Emmanuel A. Reonal</strong></u></div>
-              </div>
-              <div style={{display:"flex",gap:"50px",marginBottom:"8px"}}>
-                <div style={{minWidth:"170px"}}/>
-                <div style={{fontSize:"6.5pt"}}>President/CEO</div>
-                <div style={{fontSize:"6.5pt"}}>EVP / Vice President</div>
+                <div style={{display:"flex",alignItems:"flex-start",gap:"6px"}}>
+                  <strong>Approved By:</strong>
+                  <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center"}}>
+                    <u><strong>Joel V. Agsaoay</strong></u>
+                    <div style={{fontSize:"6.5pt",marginTop:"2px"}}>President/CEO</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"flex-start",gap:"6px"}}>
+                  <strong>Approved By:</strong>
+                  <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center"}}>
+                    <u><strong>Emmanuel A. Reonal</strong></u>
+                    <div style={{fontSize:"6.5pt",marginTop:"2px"}}>EVP / Vice President</div>
+                  </div>
+                </div>
               </div>
               <div><strong>Received By:</strong>&nbsp;&nbsp;{employeeName}</div>
             </div>
