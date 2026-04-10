@@ -1946,7 +1946,7 @@ export default function RecordWorkHours() {
                             <div style={S.loadingInput("95px")}><div style={S.spinner}></div></div>
                           ) : (
                             <div style={S.timeInputWrapper()}>
-                              <Clock size={14} color={NAVY} style={{flexShrink:0,opacity:0.5}} />
+                              <Clock size={14} color={RED} style={{flexShrink:0,opacity:0.7}} />
                               <input
                                 style={S.timeInput()} type="text" placeholder="HH:MM AM"
                                 value={val}
