@@ -306,10 +306,10 @@ export default function PaySlipGenerator() {
   const [remarksByDate,     setRemarksByDate]     = useState({});
 
   // Government deductions toggles
-  const [showGovDeductions,       setShowGovDeductions]       = useState(true);
-  const [applySSSDeduction,       setApplySSSDeduction]       = useState(true);
-  const [applyPhilHealthDeduction,setApplyPhilHealthDeduction]= useState(true);
-  const [applyPagIbigDeduction,   setApplyPagIbigDeduction]   = useState(true);
+  const [showGovDeductions,       setShowGovDeductions]       = useState(false);
+  const [applySSSDeduction,       setApplySSSDeduction]       = useState(false);
+  const [applyPhilHealthDeduction,setApplyPhilHealthDeduction]= useState(false);
+  const [applyPagIbigDeduction,   setApplyPagIbigDeduction]   = useState(false);
 
   const resetCashAdvance = () => { setCashAdvance(0); setSubsidy(0); setCurrentPaySlip(null); };
 
