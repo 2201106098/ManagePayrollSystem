@@ -1273,12 +1273,12 @@ export default function RecordWorkHours() {
   /* ── styles ── */
   const S = {
     wrap:{ width:"100%", fontFamily:"'DM Sans',sans-serif" },
-    topRow:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"22px", gap:"16px" },
-    clockCard:{ background:`linear-gradient(135deg,${NAVY} 0%,#1e3a5f 100%)`, borderRadius:"16px", padding:"24px 32px", boxShadow:"0 8px 32px rgba(19,36,64,.15)", minWidth:"280px", position:"relative", overflow:"hidden", border:"1px solid rgba(255,255,255,.1)" },
-    clockTime:{ fontFamily:"'Playfair Display',serif", fontSize:"36px", fontWeight:"900", color:WHITE, letterSpacing:".02em", lineHeight:"1.2", position:"relative", zIndex:2 },
-    clockDt:{ fontSize:"14px", color:"rgba(255,255,255,.8)", marginTop:"8px", fontWeight:"500", position:"relative", zIndex:2 },
-    clockGlow:{ position:"absolute", top:"-50%", right:"-50%", width:"200%", height:"200%", background:"radial-gradient(circle,rgba(255,231,151,.1) 0%,transparent 70%)", pointerEvents:"none" },
-    editBtn:{ display:"inline-flex", alignItems:"center", gap:"8px", padding:"14px 26px", background:RED, color:WHITE, border:"none", borderRadius:"50px", fontFamily:"'DM Sans',sans-serif", fontSize:"14px", fontWeight:"600", cursor:"pointer", boxShadow:"0 3px 12px rgba(97,0,0,.3)" },
+    topRow:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"28px", gap:"20px", flexWrap:"wrap" },
+    clockCard:{ background:"#132440", borderRadius:"16px", padding:"24px 32px", boxShadow:"0 12px 40px rgba(19,36,64,.3)", minWidth:"400px", position:"relative", overflow:"hidden", border:"1px solid rgba(255,255,255,.1)" },
+    clockTime:{ fontFamily:"'Courier New','Monaco',monospace", fontSize:"56px", fontWeight:"700", color:"#FFFFFF", letterSpacing:"8px", lineHeight:"1", position:"relative", zIndex:2, marginBottom:"12px", fontVariantNumeric:"tabular-nums" },
+    clockDt:{ fontSize:"12px", color:"rgba(255,255,255,.6)", marginTop:"0", fontWeight:"600", position:"relative", zIndex:2, letterSpacing:"3px", textTransform:"uppercase" },
+    clockGlow:{ position:"absolute", top:0, right:0, width:"100%", height:"100%", background:"none", pointerEvents:"none" },
+    editBtn:{ display:"inline-flex", alignItems:"center", gap:"8px", padding:"14px 28px", background:RED, color:WHITE, border:"none", borderRadius:"50px", fontFamily:"'DM Sans',sans-serif", fontSize:"14px", fontWeight:"700", cursor:"pointer", boxShadow:"0 6px 20px rgba(97,0,0,.25)", transition:"all .3s ease" },
     navRow:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px", gap:"12px", flexWrap:"wrap" },
     prevBtn:{ display:"inline-flex", alignItems:"center", gap:"4px", padding:"8px 16px", background:WHITE, color:NAVY, border:`1px solid ${BORDER}`, borderRadius:"20px 0 0 20px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"600", cursor:"pointer" },
     datePill:{ padding:"8px 18px", background:isFuture?"#f0f7ff":WHITE, color:isFuture?"#1d4ed8":NAVY, fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"600", borderTop:`1px solid ${isFuture?"#bfdbfe":BORDER}`, borderBottom:`1px solid ${isFuture?"#bfdbfe":BORDER}`, borderLeft:"none", borderRight:"none", whiteSpace:"nowrap" },
@@ -1736,6 +1736,7 @@ export default function RecordWorkHours() {
     <div style={S.wrap}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}
+        @keyframes float{0%,100%{transform:translateY(0px)}50%{transform:translateY(-8px)}}
         @keyframes slideIn{from{transform:translateY(-12px);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
@@ -1771,9 +1772,34 @@ export default function RecordWorkHours() {
       <div style={S.topRow}>
         <div style={S.clockCard}>
           <div style={S.clockGlow}/>
-          <Clock style={{position:"absolute",top:"16px",right:"16px",width:"24px",height:"24px",opacity:.6,color:WHITE}}/>
-          <div style={S.clockTime}>{clockStr||"--:--:--"}</div>
-          <div style={S.clockDt}>{clockDate||fmtDisplayDate(today)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:"24px",alignItems:"center"}}>
+            {/* Day */}
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:"48px",fontWeight:"700",color:"#FFFFFF",letterSpacing:"2px",marginBottom:"8px"}}>
+                {DAYS_SHORT[new Date().getDay()]}
+              </div>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,.5)",letterSpacing:"1px",textTransform:"uppercase"}}>Day</div>
+            </div>
+            {/* Time separator and display */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"2px"}}>
+              <div style={{fontSize:"48px",fontWeight:"700",color:"#FFFFFF",letterSpacing:"2px"}}>
+                {clockStr ? clockStr.split(":")[0] : "--"}
+              </div>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,.5)",letterSpacing:"1px",textTransform:"uppercase"}}>Hours</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"2px"}}>
+              <div style={{fontSize:"48px",fontWeight:"700",color:"#FFFFFF",letterSpacing:"2px"}}>
+                {clockStr ? clockStr.split(":")[1] : "--"}
+              </div>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,.5)",letterSpacing:"1px",textTransform:"uppercase"}}>Minutes</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"2px"}}>
+              <div style={{fontSize:"48px",fontWeight:"700",color:"#FFFFFF",letterSpacing:"2px"}}>
+                {clockStr ? clockStr.split(":")[2]?.substring(0,2) : "--"}
+              </div>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,.5)",letterSpacing:"1px",textTransform:"uppercase"}}>Seconds</div>
+            </div>
+          </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:"10px",alignItems:"flex-end"}}>
           <button style={S.editBtn} onClick={()=>{ if(pageRows[0]&&!getStatus(pageRows[0]._id)) openModal(pageRows[0]); }}>
