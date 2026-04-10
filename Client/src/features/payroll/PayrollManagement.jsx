@@ -409,20 +409,19 @@ const PayrollManagement = ({ children }) => {
           zIndex: 10
         }}
       >
-        {/* Top Bar - Hide on payslip page */}
-        {activePage !== 'payslip' && (
-          <header 
-            className="topbar no-print"
-            style={{
-              background: '#FFFFFF',
-              padding: '16px 24px',
-              borderBottom: '1px solid rgba(167, 39, 3, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'between',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-            }}
-          >
+        {/* Top Bar */}
+        <header 
+          className="topbar no-print"
+          style={{
+            background: '#FFFFFF',
+            padding: '16px 24px',
+            borderBottom: '1px solid rgba(167, 39, 3, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'between',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+          }}
+        >
           <div style={{ flex: 1 }}>
             <h1 style={{ 
               fontFamily: "'Playfair Display', serif", 
@@ -467,8 +466,7 @@ const PayrollManagement = ({ children }) => {
               AD
             </div>
           </div>
-          </header>
-        )}
+        </header>
 
         {/* Page Content */}
         <div 
