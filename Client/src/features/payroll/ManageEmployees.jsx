@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { toast } from "react-hot-toast";
 import { employeeAPI } from "../../api/employee.api";
 import ShimmerLoader from "../../components/ui/ShimmerLoader";
 import { TableShimmer, CardShimmer } from "../../components/ui/ShimmerLoader";
@@ -157,9 +158,16 @@ export default function ManageEmployees() {
 
   const handleArchive = async (emp) => {
     try {
+      setError("");
       await employeeAPI.archiveEmployee(emp._id);
-      fetchEmployees();
+      await fetchEmployees();
       const fullName = emp.name || `${emp.firstName || ""} ${emp.middleInitial ? emp.middleInitial + '. ' : ''}${emp.lastName || ""}`.trim();
+      toast.success(`Employee ${emp.isArchived ? "unarchived" : "archived"} successfully`, {
+        style: {
+          background: RED,
+          color: WHITE,
+        },
+      });
       addActivity({
         emp: fullName || 'Employee',
         action: emp.isArchived ? 'Employee Unarchived' : 'Employee Archived',

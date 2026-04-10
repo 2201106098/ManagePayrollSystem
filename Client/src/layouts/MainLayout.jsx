@@ -36,7 +36,6 @@ const MainLayout = () => {
     {
       name: 'Employees',
       href: '/employees',
-      icon: Users,
       current: location.pathname.startsWith('/employees'),
     },
     {

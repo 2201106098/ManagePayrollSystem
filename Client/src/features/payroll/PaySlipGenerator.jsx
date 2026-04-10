@@ -998,9 +998,22 @@ export default function PaySlipGenerator() {
               <div style={{width:"130px",flexShrink:0,textAlign:"center"}}>
                 <div style={{fontSize:"7.5pt",fontWeight:"700",height:"12px",display:"flex",alignItems:"center",justifyContent:"center",margin:0,whiteSpace:"nowrap"}}>NAME OF EMPLOYEE</div>
                 <div style={{fontSize:"7pt",height:"12px",display:"flex",alignItems:"center",justifyContent:"center",margin:0}}>{employeeName}</div>
-                {[["Day",""],["Date",""],["Time Management","b"],["Day",""],["Date",""],["Time Management","b"],["Day",""],["Date",""],["Time Management","b"],["Total hrs","r"]].map(([lbl,cls],i)=>(
-                  <div key={i} style={{height:"11px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:cls==="b"||cls==="r"?"7pt":"6.5pt",fontWeight:cls==="b"||cls==="r"?"700":"400",color:cls==="r"?BLUE_CSS:cls==="b"?"#000":"#555"}}>{lbl}</div>
-                ))}
+                {(() => {
+                  const labels = [];
+                  if (tableData.week1DayLabels.length > 0) {
+                    labels.push(["Day",""], ["Date",""], ["Time Management","b"]);
+                  }
+                  if (tableData.week2DayLabels.length > 0) {
+                    labels.push(["Day",""], ["Date",""], ["Time Management","b"]);
+                  }
+                  if (tableData.week3DayLabels.length > 0) {
+                    labels.push(["Day",""], ["Date",""], ["Time Management","b"]);
+                  }
+                  labels.push(["Total hrs","r"]);
+                  return labels.map(([lbl,cls],i)=>(
+                    <div key={i} style={{height:"11px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:cls==="b"||cls==="r"?"7pt":"6.5pt",fontWeight:cls==="b"||cls==="r"?"700":"400",color:cls==="r"?BLUE_CSS:cls==="b"?"#000":"#555"}}>{lbl}</div>
+                  ));
+                })()}
               </div>
 
               {/* Timeframe grid */}
@@ -1019,15 +1032,27 @@ export default function PaySlipGenerator() {
                     <col style={{width:"5%"}} /><col style={{width:"13%"}}/>
                   </colgroup>
                   <tbody>
-                    <tr>{tableData.week1DayLabels.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/><td style={tftd()}/></tr>
-                    <tr>{tableData.week1Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
-                    <tr>{tableData.week1Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[0]}</td></tr>
-                    <tr>{tableData.week2DayLabels.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/></tr>
-                    <tr>{tableData.week2Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
-                    <tr>{tableData.week2Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[1]}</td></tr>
-                    <tr>{tableData.week3DayLabels.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/></tr>
-                    <tr>{tableData.week3Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
-                    <tr>{tableData.week3Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[2]}</td></tr>
+                    {tableData.week1DayLabels.length > 0 && (
+                      <>
+                        <tr>{tableData.week1DayLabels.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/><td style={tftd()}/></tr>
+                        <tr>{tableData.week1Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
+                        <tr>{tableData.week1Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[0]}</td></tr>
+                      </>
+                    )}
+                    {tableData.week2DayLabels.length > 0 && (
+                      <>
+                        <tr>{tableData.week2DayLabels.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/></tr>
+                        <tr>{tableData.week2Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
+                        <tr>{tableData.week2Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[1]}</td></tr>
+                      </>
+                    )}
+                    {tableData.week3DayLabels.length > 0 && (
+                      <>
+                        <tr>{tableData.week3DayLabels.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd()}/></tr>
+                        <tr>{tableData.week3Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
+                        <tr>{tableData.week3Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[2]}</td></tr>
+                      </>
+                    )}
                     <tr style={{borderTop:"1.5px solid #000"}}>
                       {["","","","","",""].map((v,i)=><td key={i} style={tftd({color:BLUE_CSS,fontWeight:"700"})}>{v}</td>)}
                       <td style={tftd({color:BLUE_CSS,fontWeight:"700"})}>Grand Total Hours</td>
