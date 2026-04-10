@@ -45,11 +45,13 @@ const SSSBrackets = [
 
 /**
  * SSS is a fixed monthly contribution looked up by bracket.
- * Divide by 2 so each half-month payslip only carries half the monthly amount.
+ * The salary passed in is a half-month basic pay, so we convert it
+ * to monthly equivalent, find the bracket, then divide by 2 for payslip.
  * Full monthly SSS = this value × 2.
  */
-const calculateSSS = (monthlySalary) => {
-  if (!monthlySalary || monthlySalary <= 0) return 0;
+const calculateSSS = (halfMonthBasicPay) => {
+  if (!halfMonthBasicPay || halfMonthBasicPay <= 0) return 0;
+  const monthlySalary = halfMonthBasicPay * 2;  // Convert to monthly
   const capped = Math.min(monthlySalary, 35000);
   const bracket = SSSBrackets.find(b => capped >= b.min && capped <= b.max);
   const monthlyEE = bracket
@@ -545,10 +547,11 @@ export default function PaySlipGenerator() {
 
   const effectiveGrossPay = effectiveBasicPay + effectiveOvertimePay + totalAllowances;
 
-  // ── Government deductions (each already halved per payslip inside the functions) ──
-  const sssDeduction       = applySSSDeduction        && showGovDeductions ? calculateSSS(effectiveBasicPay)       : 0;
-  const philhealthDeduction= applyPhilHealthDeduction && showGovDeductions ? calculatePhilHealth(effectiveBasicPay): 0;
-  const pagibigDeduction   = applyPagIbigDeduction    && showGovDeductions ? calculatePagIbig(effectiveBasicPay)   : 0;
+  // ── Government deductions (calculated on half-month salary: basic + allowances, excludes cash advance) ──
+  const halfMonthSalary    = effectiveBasicPay + totalAllowances;
+  const sssDeduction       = applySSSDeduction        && showGovDeductions ? calculateSSS(halfMonthSalary)       : 0;
+  const philhealthDeduction= applyPhilHealthDeduction && showGovDeductions ? calculatePhilHealth(halfMonthSalary): 0;
+  const pagibigDeduction   = applyPagIbigDeduction    && showGovDeductions ? calculatePagIbig(halfMonthSalary)   : 0;
   const totalGovDeductions = sssDeduction + philhealthDeduction + pagibigDeduction;
 
   const subsidyValue                    = Number(subsidy || 0);
