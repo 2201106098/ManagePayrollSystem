@@ -96,9 +96,8 @@ const PayrollManagement = ({ children }) => {
         return (
           <div style={{ 
             margin: '-24px', 
-            width: sidebarCollapsed ? 'calc(100vw - 44px)' : 'calc(100vw - 236px)', // Account for sidebar and padding
+            width: sidebarCollapsed ? 'calc(100vw - 44px)' : 'calc(100vw - 236px)',
             marginLeft: '-24px',
-            background: '#f5f5f5',
             padding: '20px',
             overflowX: 'auto',
             minHeight: 'calc(100vh - 80px)'
