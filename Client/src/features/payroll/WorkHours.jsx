@@ -1293,9 +1293,10 @@ export default function RecordWorkHours() {
     thL:{ padding:"13px 16px", textAlign:"left", fontSize:"12px", fontWeight:"700", color:WHITE, textTransform:"uppercase", letterSpacing:".08em", background:RED, whiteSpace:"nowrap" },
     td:(eid,st)=>({ padding:"12px 10px", fontSize:"13px", color:st?"#9ca3af":"#111827", borderBottom:`1px solid ${BORDER}`, background:st==="absent"?"#fff5f5":(st?.startsWith("halfday"))?"#fffbea":st==="out_of_town"?"#eff6ff":hovRow===eid?"#fdf8f4":WHITE, textAlign:"center", verticalAlign:"middle" }),
     tdL:(eid,st)=>({ padding:"12px 16px", fontSize:"13px", color:st?"#9ca3af":"#111827", borderBottom:`1px solid ${BORDER}`, background:st==="absent"?"#fff5f5":(st?.startsWith("halfday"))?"#fffbea":st==="out_of_town"?"#eff6ff":hovRow===eid?"#fdf8f4":WHITE, textAlign:"left", verticalAlign:"middle" }),
-    timeInput:()=>({ padding:"8px 12px", border:"2px solid #e0d8d0", borderRadius:"8px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"500", color:NAVY, width:"95px", height:"36px", outline:"none", textAlign:"center", background:WHITE, cursor:"text" }),
-    otInput:()=>({ padding:"8px 12px", border:"2px solid #e0d8d0", borderRadius:"8px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"500", color:NAVY, width:"80px", height:"36px", outline:"none", textAlign:"center", background:WHITE, cursor:"text" }),
-    loadingInput:(width)=>({ padding:"8px 12px", border:"2px solid #e0d8d0", borderRadius:"8px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"500", color:"#9ca3af", width:width||"95px", height:"36px", outline:"none", textAlign:"center", background:"#f9fafb", cursor:"not-allowed" }),
+    timeInputWrapper:()=>({ display:"inline-flex", alignItems:"center", gap:"6px", padding:"0 8px", border:"2px solid #d4d0ca", borderRadius:"10px", background:"linear-gradient(135deg, #fafaf8 0%, #ffffff 100%)", height:"40px", transition:"all .25s ease" }),
+    timeInput:()=>({ flex:1, border:"none", borderRadius:"6px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"500", color:NAVY, outline:"none", textAlign:"center", background:"transparent", cursor:"text", padding:"0" }),
+    otInput:()=>({ padding:"8px 12px", border:"2px solid #d4d0ca", borderRadius:"10px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"500", color:NAVY, width:"85px", height:"40px", outline:"none", textAlign:"center", background:"linear-gradient(135deg, #fafaf8 0%, #ffffff 100%)", cursor:"text", transition:"all .25s ease" }),
+    loadingInput:(width)=>({ padding:"8px 12px", border:"2px solid #e0d8d0", borderRadius:"10px", fontFamily:"'DM Sans',sans-serif", fontSize:"13px", fontWeight:"500", color:"#9ca3af", width:width||"95px", height:"40px", outline:"none", textAlign:"center", background:"#f9fafb", cursor:"not-allowed" }),
     spinner:{ display:"inline-block", width:"12px", height:"12px", border:"2px solid #e5e7eb", borderTop:"2px solid #3b82f6", borderRadius:"50%", animation:"spin 1s linear infinite" },
     saveBtn:(saved)=>({ display:"inline-flex", alignItems:"center", gap:"4px", padding:"5px 10px", borderRadius:"6px", border:"none", background:saved?"#10b981":"#f59e0b", color:WHITE, fontSize:"12px", fontWeight:"600", cursor:"pointer" }),
     absentBtn:(eid)=>({ display:"inline-flex", alignItems:"center", gap:"4px", padding:"5px 10px", borderRadius:"6px", border:"none", background:hov===`abs-${eid}`?"#fee2e2":"#fff1f1", color:RED, fontSize:"12px", fontWeight:"600", cursor:"pointer" }),
@@ -1944,12 +1945,15 @@ export default function RecordWorkHours() {
                           ) : isLoading ? (
                             <div style={S.loadingInput("95px")}><div style={S.spinner}></div></div>
                           ) : (
-                            <input
-                              style={S.timeInput()} type="text" placeholder="HH:MM AM"
-                              value={val}
-                              onChange={e => updateTimeField(emp._id, field, e.target.value)}
-                              onBlur={() => handleFieldBlur(emp._id, field)}
-                            />
+                            <div style={S.timeInputWrapper()}>
+                              <Clock size={14} color={NAVY} style={{flexShrink:0,opacity:0.5}} />
+                              <input
+                                style={S.timeInput()} type="text" placeholder="HH:MM AM"
+                                value={val}
+                                onChange={e => updateTimeField(emp._id, field, e.target.value)}
+                                onBlur={() => handleFieldBlur(emp._id, field)}
+                              />
+                            </div>
                           )}
                         </td>
                       );
@@ -2204,6 +2208,22 @@ export default function RecordWorkHours() {
       {/* ── EMPLOYEE DETAIL MODAL ── */}
       {renderEmpDetailModal()}
 
+      <style>{`
+        div[style*="timeInputWrapper"] {
+          transition: all 0.25s ease;
+        }
+        div[style*="timeInputWrapper"]:hover {
+          border-color: #a72703;
+          box-shadow: 0 2px 8px rgba(167, 39, 3, 0.1);
+        }
+        div[style*="timeInputWrapper"]:focus-within {
+          border-color: #610000;
+          box-shadow: 0 0 0 3px rgba(97, 0, 0, 0.08);
+        }
+        input[style*="timeInput"]:focus {
+          outline: none;
+        }
+      `}</style>
     </div>
   );
 }
