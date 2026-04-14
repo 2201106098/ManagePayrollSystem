@@ -427,7 +427,7 @@ const PayrollDashboard = () => {
             {recentActivity.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#A72703' }}>
+                  <tr style={{ background: '#610000' }}>
                     <th style={{ 
                       padding: '11px 16px', 
                       textAlign: 'left', 

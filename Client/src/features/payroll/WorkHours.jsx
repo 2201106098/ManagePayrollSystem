@@ -1287,7 +1287,7 @@ export default function RecordWorkHours() {
     srchWrap:{ position:"relative", display:"flex", alignItems:"center" },
     srchIcon:{ position:"absolute", left:"10px", display:"flex", alignItems:"center", pointerEvents:"none" },
     srchInput:{ padding:"8px 12px 8px 34px", border:`1px solid ${BORDER}`, borderRadius:"20px", fontFamily:"'DM Sans',sans-serif", fontSize:"13.5px", color:NAVY, background:WHITE, outline:"none", width:"220px" },
-    tblWrap:{ background:WHITE, borderRadius:"12px", overflow:"hidden", border:`1px solid ${BORDER}`, boxShadow:"0 1px 4px rgba(0,0,0,.07)" },
+    tblWrap:{ background:WHITE, borderRadius:"12px", overflowX:"auto", border:`1px solid ${BORDER}`, boxShadow:"0 1px 4px rgba(0,0,0,.07)" },
     table:{ width:"100%", borderCollapse:"collapse" },
     th:{ padding:"13px 12px", textAlign:"center", fontSize:"12px", fontWeight:"700", color:WHITE, textTransform:"uppercase", letterSpacing:".08em", background:RED, whiteSpace:"nowrap" },
     thL:{ padding:"13px 16px", textAlign:"left", fontSize:"12px", fontWeight:"700", color:WHITE, textTransform:"uppercase", letterSpacing:".08em", background:RED, whiteSpace:"nowrap" },
@@ -1549,7 +1549,7 @@ export default function RecordWorkHours() {
           )}
 
           {/* ── TABLE BODY ── */}
-          <div style={{flex:1,overflowY:"auto",padding:"0"}}>
+          <div style={{flex:1,overflowX:"auto",overflowY:"auto",padding:"0"}}>
             {empDetailLoading ? (
               <div style={{padding:"48px",display:"flex",flexDirection:"column",alignItems:"center",gap:"16px"}}>
                 <div style={{
