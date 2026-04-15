@@ -38,7 +38,7 @@ export const API_BASE_URL = apiBaseUrl;
 
 const axiosClient = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 15000,
+  timeout: 30000, // Increased timeout for production cold starts
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -47,6 +47,57 @@ const axiosClient = axios.create({
 
 // In-memory token storage (more secure than localStorage)
 let accessToken = null;
+
+// Toast debouncing to prevent spam
+const toastDebounceMap = new Map();
+const debouncedToast = (message, type = 'error', delay = 3000) => {
+  const key = `${type}:${message}`;
+  const now = Date.now();
+  const lastShown = toastDebounceMap.get(key);
+
+  if (lastShown && now - lastShown < delay) {
+    return; // Skip showing toast if recently shown
+  }
+
+  toastDebounceMap.set(key, now);
+  if (type === 'error') {
+    toast.error(message);
+  } else if (type === 'success') {
+    toast.success(message);
+  } else if (type === 'info') {
+    toast(message);
+  }
+
+  // Clean up old entries after delay
+  setTimeout(() => {
+    toastDebounceMap.delete(key);
+  }, delay);
+};
+
+// Retry logic with exponential backoff
+const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const isNetworkError = !error.response && error.request;
+      const isServerError = error.response?.status >= 500;
+      const isCORSOrTimeout = error.code === 'ECONNABORTED' || error.message.includes('CORS') || error.message.includes('Network Error');
+
+      if (attempt === maxRetries - 1) {
+        throw error; // Re-throw on last attempt
+      }
+
+      if (isNetworkError || isServerError || isCORSOrTimeout) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error; // Don't retry on client errors (4xx)
+      }
+    }
+  }
+};
 
 // Function to set access token
 export const setAccessToken = (token) => {
@@ -205,7 +256,24 @@ axiosClient.interceptors.response.use(
       return Promise.reject(error);
     }
     const { response, config } = error;
-    
+
+    // Apply retry logic for network errors, server errors, and CORS issues
+    const isNetworkError = !response && error.request;
+    const isServerError = response?.status >= 500;
+    const isCORSOrTimeout = error.code === 'ECONNABORTED' || error.message?.includes('CORS') || error.message?.includes('Network Error');
+
+    if ((isNetworkError || isServerError || isCORSOrTimeout) && config && !config.__isRetry) {
+      config.__isRetry = true;
+      try {
+        return await retryWithBackoff(async () => {
+          return axiosClient(config);
+        }, 3, 1000);
+      } catch (retryError) {
+        // If retry fails, continue to error handling below
+        error = retryError;
+      }
+    }
+
     if (response) {
       switch (response.status) {
         case 401:
@@ -216,11 +284,11 @@ axiosClient.interceptors.response.use(
               {},
               { withCredentials: true }
             );
-            
+
             // Update access token
             const newAccessToken = refreshResponse.data.data.accessToken;
             setAccessToken(newAccessToken);
-            
+
             // Retry the original request
             config.headers.Authorization = `Bearer ${newAccessToken}`;
             return axiosClient(config);
@@ -233,34 +301,34 @@ axiosClient.interceptors.response.use(
             if (window.location.pathname !== '/login') {
               window.location.href = '/login';
             }
-            toast.error('Session expired. Please login again.');
+            debouncedToast('Session expired. Please login again.', 'error');
           }
           break;
         case 403:
-          toast.error('Access denied. Insufficient permissions.');
+          debouncedToast('Access denied. Insufficient permissions.', 'error');
           break;
         case 404:
-          toast.error('Resource not found.');
+          debouncedToast('Resource not found.', 'error');
           break;
         case 429:
-          toast.error('Too many requests. Please try again later.');
+          debouncedToast('Too many requests. Please try again later.', 'error');
           break;
         case 500:
-          toast.error('Server error. Please try again later.');
+          debouncedToast('Server error. Please try again later.', 'error');
           break;
         default:
-          toast.error(response.data?.message || 'An error occurred');
+          debouncedToast(response.data?.message || 'An error occurred', 'error');
       }
     } else if (error.request) {
       if (error.code === 'ECONNABORTED') {
-        toast.error('Request timed out. Please try again.');
+        debouncedToast('Request timed out. Please try again.', 'error');
       } else {
-        toast.error('Network error. Please check your connection.');
+        debouncedToast('Network error. Please check your connection.', 'error');
       }
     } else {
-      toast.error('An unexpected error occurred.');
+      debouncedToast('An unexpected error occurred.', 'error');
     }
-    
+
     return Promise.reject(error);
   }
 );

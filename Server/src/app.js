@@ -54,7 +54,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Rate limiting
+// Rate limiting (applied AFTER CORS to avoid blocking preflight requests)
 app.use(apiLimiter);
 
 // Body parsing middleware
