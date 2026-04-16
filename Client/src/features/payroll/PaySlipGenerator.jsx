@@ -17,9 +17,6 @@ const MAX_TIMEFRAME_DAYS = 17;
 const PAYSLIP_DOWNLOAD_COUNTER_KEY = "payslipDownloadsByMonth";
 
 /* ── GOVERNMENT DEDUCTIONS CALCULATIONS ── */
-// NOTE: All deductions below return the PER-PAYSLIP amount (half-month).
-// Monthly totals = these values × 2 across both First Half and Second Half.
-
 const SSSBrackets = [
   { min: 0,         max: 3250,    ee: 135,     er: 203.50  },
   { min: 3250.01,   max: 4072.50, ee: 169,     er: 253.50  },
@@ -43,51 +40,30 @@ const SSSBrackets = [
   { min: 27820.51,  max: 30500,   ee: 1282.50, er: 1924.50 },
 ];
 
-/**
- * SSS is a fixed monthly contribution looked up by bracket.
- * The salary passed in is a half-month basic pay, so we convert it
- * to monthly equivalent, find the bracket, then divide by 2 for payslip.
- * Full monthly SSS = this value × 2.
- */
 const calculateSSS = (halfMonthBasicPay) => {
   if (!halfMonthBasicPay || halfMonthBasicPay <= 0) return 0;
-  const monthlySalary = halfMonthBasicPay * 2;  // Convert to monthly
+  const monthlySalary = halfMonthBasicPay * 2;
   const capped = Math.min(monthlySalary, 35000);
   const bracket = SSSBrackets.find(b => capped >= b.min && capped <= b.max);
-  const monthlyEE = bracket
-    ? bracket.ee
-    : SSSBrackets[SSSBrackets.length - 1].ee;
-  return monthlyEE / 2; // ← half per payslip
+  const monthlyEE = bracket ? bracket.ee : SSSBrackets[SSSBrackets.length - 1].ee;
+  return monthlyEE / 2;
 };
 
-/**
- * PhilHealth = 5% of monthly salary, employee pays half (2.5%).
- * The salary passed in is a half-month basic pay, so we annualize it
- * to get the monthly equivalent, then compute the monthly deduction,
- * and finally split it across two payslips (÷ 2).
- *
- * Monthly employee share = min(monthlySalary, 100000) × 2.5%, capped at ₱2,500.
- * Per payslip = monthly employee share ÷ 2, capped at ₱1,250.
- */
 const calculatePhilHealth = (halfMonthBasicPay) => {
   if (!halfMonthBasicPay || halfMonthBasicPay <= 0) return 0;
-  const monthlySalary = halfMonthBasicPay * 2;          // estimate full month
+  const monthlySalary = halfMonthBasicPay * 2;
   const capped        = Math.min(monthlySalary, 100000);
-  const monthlyEE     = Math.min(capped * 0.025, 2500); // 2.5% employee share, max ₱2,500/month
-  return monthlyEE / 2;                                 // ← ₱1,250 max per payslip
+  const monthlyEE     = Math.min(capped * 0.025, 2500);
+  return monthlyEE / 2;
 };
 
-/**
- * Pag-IBIG maximum monthly employee contribution is ₱200.
- * Split in half → ₱100 per payslip.
- */
 const calculatePagIbig = (halfMonthBasicPay) => {
   if (!halfMonthBasicPay || halfMonthBasicPay <= 0) return 0;
   const monthlySalary = halfMonthBasicPay * 2;
   const capped        = Math.min(monthlySalary, 10000);
   const rate          = monthlySalary <= 1500 ? 0.01 : 0.02;
-  const monthlyEE     = Math.min(capped * rate, 200);   // max ₱200/month
-  return monthlyEE / 2;                                 // ← ₱100 max per payslip
+  const monthlyEE     = Math.min(capped * rate, 200);
+  return monthlyEE / 2;
 };
 
 const incrementPaySlipDownloadCounter = (yearValue, monthValue) => {
@@ -116,10 +92,7 @@ const formatTime12 = (time24) => {
 const hasWorkedTime = (day) => {
   if (!day) return false;
   return Boolean(
-    day.timeIn ||
-    day.timeOut ||
-    day.breakTime ||
-    day.resume ||
+    day.timeIn || day.timeOut || day.breakTime || day.resume ||
     (Number(day.hours)        || 0) > 0 ||
     (Number(day.totalHours)   || 0) > 0 ||
     (Number(day.workedHours)  || 0) > 0 ||
@@ -208,29 +181,83 @@ const isWeekendDate = (dateValue) => {
   return day === 0 || day === 6;
 };
 
+/* ── ACCORDION SECTION COMPONENT ── */
+function AccordionSection({ title, icon, defaultOpen = false, badge, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginBottom: "6px", border: "1px solid #e8dfd6", borderRadius: "8px", overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center",
+          justifyContent: "space-between", padding: "8px 10px",
+          background: open ? "#f9f5f2" : "#fff", border: "none",
+          cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+          outline: "1px solid #800000",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {icon && (
+            <span style={{ fontSize: "13px", color: "#800000", fontWeight: "400" }}>
+              {icon}
+            </span>
+          )}
+          <span style={{
+            fontSize: "10px", fontWeight: "700", color: "#132440",
+            textTransform: "uppercase", letterSpacing: ".06em",
+          }}>
+            {title}
+          </span>
+          {badge && (
+            <span style={{
+              background: "#A72703", color: "#fff", fontSize: "8px",
+              fontWeight: "700", borderRadius: "10px", padding: "1px 5px",
+            }}>
+              {badge}
+            </span>
+          )}
+        </span>
+        <span style={{
+          fontSize: "10px", color: "#999",
+          transform: open ? "rotate(180deg)" : "none",
+          transition: "transform .2s",
+          display: "inline-block",
+        }}>
+          ▼
+        </span>
+      </button>
+      {open && (
+        <div style={{ padding: "10px 10px 4px", background: "#fff", borderTop: "1px solid #f0ece8" }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── BREAKDOWN TABLE (screen) ── */
 function BDTable({ rows, total, onRemarkChange }) {
   const th = {
-    fontWeight:"400", background:"#f0f0f0", padding:"1px 3px",
-    borderBottom:"0.5px solid #000", textAlign:"center", fontSize:"5pt",
-    fontFamily:"Arial,sans-serif", color:"#000",
+    fontWeight: "400", background: "#f0f0f0", padding: "1px 3px",
+    borderBottom: "0.5px solid #000", textAlign: "center", fontSize: "5pt",
+    fontFamily: "Arial,sans-serif", color: "#000",
   };
   const td = (left) => ({
-    padding:"1px 3px", textAlign:left?"left":"center",
-    borderBottom:"0.5px solid #000", fontSize:"5pt",
-    fontFamily:"Arial,sans-serif", color:"#000",
+    padding: "1px 3px", textAlign: left ? "left" : "center",
+    borderBottom: "0.5px solid #000", fontSize: "5pt",
+    fontFamily: "Arial,sans-serif", color: "#000",
   });
   return (
-    <table style={{ borderCollapse:"collapse", width:"100%", marginBottom:"4px" }}>
+    <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: "4px" }}>
       <thead>
         <tr>
-          <th style={{...th, textAlign:"left", width:"12%"}}>Day</th>
-          <th style={{...th, width:"17%"}}>Time-In (PST)</th>
-          <th style={{...th, width:"14%"}}>Break</th>
-          <th style={{...th, width:"14%"}}>Resume</th>
-          <th style={{...th, width:"17%"}}>Time-Out (PST)</th>
-          <th style={{...th, width:"13%"}}>Total Hours</th>
-          <th style={{...th, width:"13%"}}>Remarks</th>
+          <th style={{ ...th, textAlign: "left", width: "12%" }}>Day</th>
+          <th style={{ ...th, width: "17%" }}>Time-In (PST)</th>
+          <th style={{ ...th, width: "14%" }}>Break</th>
+          <th style={{ ...th, width: "14%" }}>Resume</th>
+          <th style={{ ...th, width: "17%" }}>Time-Out (PST)</th>
+          <th style={{ ...th, width: "13%" }}>Total Hours</th>
+          <th style={{ ...th, width: "13%" }}>Remarks</th>
         </tr>
       </thead>
       <tbody>
@@ -242,15 +269,15 @@ function BDTable({ rows, total, onRemarkChange }) {
             <td style={td(false)}>{r.res}</td>
             <td style={td(false)}>{r.to}</td>
             <td style={td(false)}>{r.hrs}</td>
-            <td style={{...td(false), textAlign:"left"}}>
+            <td style={{ ...td(false), textAlign: "left" }}>
               <input
                 type="text"
                 value={r.rmk || ""}
                 onChange={(e) => onRemarkChange && onRemarkChange(r.id, e.target.value)}
                 className="remark-input"
                 style={{
-                  width:"100%", border:"1px solid #e5e7eb", borderRadius:"4px",
-                  padding:"2px 4px", fontSize:"6.5pt", fontFamily:"Arial,sans-serif",
+                  width: "100%", border: "1px solid #e5e7eb", borderRadius: "4px",
+                  padding: "2px 4px", fontSize: "6.5pt", fontFamily: "Arial,sans-serif",
                 }}
                 placeholder=""
               />
@@ -258,22 +285,22 @@ function BDTable({ rows, total, onRemarkChange }) {
           </tr>
         ))}
         <tr>
-          <td colSpan="4" style={{...td(false), borderTop:"0.5px solid #000", borderBottom:"none", padding:"0"}} />
+          <td colSpan="4" style={{ ...td(false), borderTop: "0.5px solid #000", borderBottom: "none", padding: "0" }} />
           <td style={{
-            ...td(false), textAlign:"right", fontWeight:"700",
-            borderTop:"0.5px solid #000", borderBottom:"none",
-            padding:"0 3px", lineHeight:1.1, whiteSpace:"nowrap",
+            ...td(false), textAlign: "right", fontWeight: "700",
+            borderTop: "0.5px solid #000", borderBottom: "none",
+            padding: "0 3px", lineHeight: 1.1, whiteSpace: "nowrap",
           }}>
             Total Hours Spent
           </td>
           <td style={{
-            ...td(false), textAlign:"right", fontWeight:"700",
-            borderTop:"0.5px solid #000", borderBottom:"none",
-            padding:"0 3px", lineHeight:1.1, whiteSpace:"nowrap",
+            ...td(false), textAlign: "right", fontWeight: "700",
+            borderTop: "0.5px solid #000", borderBottom: "none",
+            padding: "0 3px", lineHeight: 1.1, whiteSpace: "nowrap",
           }}>
             {total}
           </td>
-          <td style={{...td(false), borderTop:"0.5px solid #000", borderBottom:"none", padding:"0"}} />
+          <td style={{ ...td(false), borderTop: "0.5px solid #000", borderBottom: "none", padding: "0" }} />
         </tr>
       </tbody>
     </table>
@@ -303,25 +330,67 @@ export default function PaySlipGenerator() {
   const [cashAdvance, setCashAdvance] = useState(0);
   const [subsidy,     setSubsidy]     = useState(0);
   const [preparedBy,  setPreparedBy]  = useState('');
+  const [approvedBy1, setApprovedBy1] = useState('Joel V. Agsaoay');
+  const [approvedBy2, setApprovedBy2] = useState('Emmanuel A. Reonal');
+  const [showApprovedBy1, setShowApprovedBy1] = useState(true);
+  const [showApprovedBy2, setShowApprovedBy2] = useState(true);
   const [cashAdvanceLimit,  setCashAdvanceLimit]  = useState(null);
   const [showCALimitModal,  setShowCALimitModal]  = useState(false);
   const [remarksByDate,     setRemarksByDate]     = useState({});
 
   // Government deductions toggles
-  const [showGovDeductions,       setShowGovDeductions]       = useState(false);
-  const [applySSSDeduction,       setApplySSSDeduction]       = useState(false);
-  const [applyPhilHealthDeduction,setApplyPhilHealthDeduction]= useState(false);
-  const [applyPagIbigDeduction,   setApplyPagIbigDeduction]   = useState(false);
+  const [showGovDeductions,        setShowGovDeductions]        = useState(false);
+  const [applySSSDeduction,        setApplySSSDeduction]        = useState(false);
+  const [applyPhilHealthDeduction, setApplyPhilHealthDeduction] = useState(false);
+  const [applyPagIbigDeduction,    setApplyPagIbigDeduction]    = useState(false);
+
+  // Company information
+  const [companyName, setCompanyName] = useState(() => localStorage.getItem('payslipCompanyName') || 'DigicomLink Systems Corp');
+  const [website,     setWebsite]     = useState(() => localStorage.getItem('payslipWebsite') || 'www.digicomlink.com');
+  const [companyAddress, setCompanyAddress] = useState(() => localStorage.getItem('payslipCompanyAddress') || '');
+  const [companyCity,    setCompanyCity]    = useState(() => localStorage.getItem('payslipCompanyCity') || '');
+  const [companyPhone,   setCompanyPhone]   = useState(() => localStorage.getItem('payslipCompanyPhone') || '');
+
+  // Logo upload
+  const [logoImage, setLogoImage] = useState(() => {
+    const saved = localStorage.getItem('payslipLogo');
+    return saved || null;
+  });
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target.result;
+      setLogoImage(base64);
+      localStorage.setItem('payslipLogo', base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleLogoRemove = () => {
+    setLogoImage(null);
+    localStorage.removeItem('payslipLogo');
+  };
 
   const resetCashAdvance = () => { setCashAdvance(0); setSubsidy(0); setCurrentPaySlip(null); };
 
   useEffect(() => { fetchEmployees(); }, []);
   useEffect(() => { if (year && month !== undefined) fetchPeriods(); }, [year, month]);
 
+  // Save company info to localStorage
+  useEffect(() => { localStorage.setItem('payslipCompanyName', companyName); }, [companyName]);
+  useEffect(() => { localStorage.setItem('payslipWebsite', website); }, [website]);
+  useEffect(() => { localStorage.setItem('payslipCompanyAddress', companyAddress); }, [companyAddress]);
+  useEffect(() => { localStorage.setItem('payslipCompanyCity', companyCity); }, [companyCity]);
+  useEffect(() => { localStorage.setItem('payslipCompanyPhone', companyPhone); }, [companyPhone]);
+
   const genKey = `${selectedEmployee?._id || ""}-${selectedPeriod?.id || ""}-${year}-${month}`;
   const debouncedGenKey = useDebounce(genKey, 350);
   useEffect(() => { if (selectedEmployee && selectedPeriod) generatePaySlip(); }, [debouncedGenKey]);
 
+  useEffect(() => { localStorage.setItem('payslipLogo', logoImage); }, [logoImage]);
   useEffect(() => {
     const loadRate = async () => {
       if (!selectedEmployee?._id) { setCashAdvanceLimit(null); return; }
@@ -343,8 +412,8 @@ export default function PaySlipGenerator() {
     try {
       setLoading(true);
       const r = await employeeAPI.getAllEmployees({
-        page:1, limit:1000, status:'active',
-        showArchived:false, fields:'_id,firstName,middleInitial,lastName',
+        page: 1, limit: 1000, status: 'active',
+        showArchived: false, fields: '_id,firstName,middleInitial,lastName',
       });
       let data = [];
       if (r.success && r.data)
@@ -367,14 +436,14 @@ export default function PaySlipGenerator() {
         list = r.periods;
       }
       if (!list.length) list = [
-        { id:"P1", label:"First Half",  startDay:1,  endDay:15, payday:15, color:"#A72703" },
-        { id:"P2", label:"Second Half", startDay:16, endDay:0,  payday:0,  color:"#132440" },
+        { id: "P1", label: "1st-half",  startDay: 1,  endDay: 15, payday: 15, color: "#A72703" },
+        { id: "P2", label: "2nd-half", startDay: 16, endDay: 0,  payday: 0,  color: "#132440" },
       ];
       setPeriods(list);
       if (list.length) {
-        const now          = new Date();
-        const isCurrentYM  = (year === now.getFullYear() && month === now.getMonth());
-        const day          = now.getDate();
+        const now         = new Date();
+        const isCurrentYM = (year === now.getFullYear() && month === now.getMonth());
+        const day         = now.getDate();
         const inRange = (p) => {
           const sd = Number(p.startDay || 1);
           let   ed = Number(p.endDay   || 0);
@@ -412,9 +481,9 @@ export default function PaySlipGenerator() {
       const ctrl = new AbortController();
       generateAbortRef.current = ctrl;
       const r = await paySlipAPI.generatePaySlip({
-        employeeId: selectedEmployee._id, year, month,
-        periodId:   selectedPeriod.id,
-        cashAdvance: cashAdvance || 0,
+        employeeId:    selectedEmployee._id, year, month,
+        periodId:      selectedPeriod.id,
+        cashAdvance:   cashAdvance || 0,
         autoUndertime: false,
       }, { signal: ctrl.signal, timeout: 30000 });
       if (requestId !== generateRequestIdRef.current) return;
@@ -437,12 +506,12 @@ export default function PaySlipGenerator() {
 
   const formatWorkDaysForTable = () => {
     if (!currentPaySlip?.workDays) return {
-      week1DayLabels:[], week1Dates:[], week1Hours:[],
-      week2DayLabels:[], week2Dates:[], week2Hours:[],
-      week3DayLabels:[], week3Dates:[], week3Hours:[],
-      weekSubtotals:["","",""],
-      breakdownBlocks:[[], []],
-      totals:["0.00","0.00","0.00"],
+      week1DayLabels: [], week1Dates: [], week1Hours: [],
+      week2DayLabels: [], week2Dates: [], week2Hours: [],
+      week3DayLabels: [], week3Dates: [], week3Hours: [],
+      weekSubtotals:  ["", "", ""],
+      breakdownBlocks: [[], []],
+      totals: ["0.00", "0.00", "0.00"],
     };
     const includedDays = currentPaySlip.workDays
       .filter((day) => {
@@ -466,10 +535,6 @@ export default function PaySlipGenerator() {
     const week2HasWorked = w2.some(hasWorkedTime);
     const week3HasWorked = w3.some(hasWorkedTime);
 
-    const week1DayLabels = w1.map(d => formatDayShort(d.date));
-    const week2DayLabels = w2.map(d => formatDayShort(d.date));
-    const week3DayLabels = w3.map(d => formatDayShort(d.date));
-
     const allBreakdownDays = includedDays;
     const mid    = Math.ceil(allBreakdownDays.length / 2);
     const break1 = allBreakdownDays.slice(0, mid);
@@ -480,15 +545,15 @@ export default function PaySlipGenerator() {
     const grandTotal  = allBreakdownDays.reduce((s, d) => s + getDayRenderedHours(d), 0).toFixed(2);
 
     return {
-      week1DayLabels,
-      week1Dates: w1.map(d => new Date(d.date).toLocaleDateString('en-US', { day:'numeric', month:'short', timeZone:'UTC' })),
-      week1Hours: w1.map(d => getDayRenderedHours(d).toFixed(2)),
-      week2DayLabels,
-      week2Dates: w2.map(d => new Date(d.date).toLocaleDateString('en-US', { day:'numeric', month:'short', timeZone:'UTC' })),
-      week2Hours: w2.map(d => getDayRenderedHours(d).toFixed(2)),
-      week3DayLabels,
-      week3Dates: w3.map(d => new Date(d.date).toLocaleDateString('en-US', { day:'numeric', month:'short', timeZone:'UTC' })),
-      week3Hours: w3.map(d => getDayRenderedHours(d).toFixed(2)),
+      week1DayLabels: w1.map(d => formatDayShort(d.date)),
+      week1Dates:     w1.map(d => new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })),
+      week1Hours:     w1.map(d => getDayRenderedHours(d).toFixed(2)),
+      week2DayLabels: w2.map(d => formatDayShort(d.date)),
+      week2Dates:     w2.map(d => new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })),
+      week2Hours:     w2.map(d => getDayRenderedHours(d).toFixed(2)),
+      week3DayLabels: w3.map(d => formatDayShort(d.date)),
+      week3Dates:     w3.map(d => new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })),
+      week3Hours:     w3.map(d => getDayRenderedHours(d).toFixed(2)),
       weekSubtotals: [
         week1HasWorked ? week1Total : "",
         week2HasWorked ? week2Total : "",
@@ -527,11 +592,11 @@ export default function PaySlipGenerator() {
     return 0;
   })();
 
-  const undertimeDeduct        = undertimeDeductRaw;
-  const totalAllowances        = noWorkedData
+  const undertimeDeduct         = undertimeDeductRaw;
+  const totalAllowances         = noWorkedData
     ? 0
     : (currentPaySlip?.allowances?.reduce((sum, a) => sum + Number(a.amount || 0), 0) || 0);
-  const totalDeductions        = currentPaySlip?.deductions?.reduce((sum, d) => sum + Number(d.amount || 0), 0) || 0;
+  const totalDeductions         = currentPaySlip?.deductions?.reduce((sum, d) => sum + Number(d.amount || 0), 0) || 0;
   const adjustedTotalDeductions = totalDeductions - undertimeDeductRaw + undertimeDeduct;
 
   const effectiveOvertimePay = (() => {
@@ -547,12 +612,11 @@ export default function PaySlipGenerator() {
 
   const effectiveGrossPay = effectiveBasicPay + effectiveOvertimePay + totalAllowances;
 
-  // ── Government deductions (calculated on half-month salary: basic + allowances, excludes cash advance) ──
-  const halfMonthSalary    = effectiveBasicPay + totalAllowances;
-  const sssDeduction       = applySSSDeduction        && showGovDeductions ? calculateSSS(halfMonthSalary)       : 0;
-  const philhealthDeduction= applyPhilHealthDeduction && showGovDeductions ? calculatePhilHealth(halfMonthSalary): 0;
-  const pagibigDeduction   = applyPagIbigDeduction    && showGovDeductions ? calculatePagIbig(halfMonthSalary)   : 0;
-  const totalGovDeductions = sssDeduction + philhealthDeduction + pagibigDeduction;
+  const halfMonthSalary     = effectiveBasicPay + totalAllowances;
+  const sssDeduction        = applySSSDeduction        && showGovDeductions ? calculateSSS(halfMonthSalary)        : 0;
+  const philhealthDeduction = applyPhilHealthDeduction && showGovDeductions ? calculatePhilHealth(halfMonthSalary) : 0;
+  const pagibigDeduction    = applyPagIbigDeduction    && showGovDeductions ? calculatePagIbig(halfMonthSalary)    : 0;
+  const totalGovDeductions  = sssDeduction + philhealthDeduction + pagibigDeduction;
 
   const subsidyValue                    = Number(subsidy || 0);
   const effectiveNetPay                 = effectiveGrossPay - adjustedTotalDeductions - totalGovDeductions;
@@ -571,267 +635,284 @@ export default function PaySlipGenerator() {
   })();
 
   /* ══════════════════════════════════════════════════════════════════════════
-     generatePDF
+     generatePDF  — FIXED VERSION
+     Fixes:
+       1. Logo dimensions read asynchronously via img.onload (was always 0)
+       2. Pay Summary Y anchored to tfGridStartY, not hacked with ROW_H * 10
+       3. y advances past whichever column (TF grid or Pay Summary) is taller
+       4. Breakdown footer column boundaries corrected
   ══════════════════════════════════════════════════════════════════════════ */
   const generatePDF = async () => {
     if (!currentPaySlip) { setError("Please generate a payslip first"); return; }
     try {
       setPdfLoading(true);
-
       const jspdfModule = await import("jspdf");
       const JsPDF = jspdfModule.jsPDF || jspdfModule.default;
-      const doc = new JsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+      const doc = new JsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
       const PW = 297;
       const PH = 210;
       const M  = 10;
-      const CW = PW - M * 2;
+      const CW = PW - M * 2; // 277
 
-      const RED  = [167, 39,   3];
-      const NAVY = [ 26, 58, 143];
-      const BLK  = [  0,  0,   0];
-      const GRY  = [136,136, 136];
-      const LGRY = [210,210, 210];
+      const RED  = [167,  39,   3];
+      const NAVY = [ 26,  58, 143];
+      const BLK  = [  0,   0,   0];
+      const GRY  = [136, 136, 136];
+      const LGRY = [210, 210, 210];
+
+      // ── helpers ────────────────────────────────────────────────────────────
+      const setColor = (rgb) => doc.setTextColor(...rgb);
+      const setFill  = (rgb) => doc.setFillColor(...rgb);
+      const setDraw  = (rgb) => doc.setDrawColor(...rgb);
+      const font     = (style = "normal", size = 8) => {
+        doc.setFont("helvetica", style); doc.setFontSize(size);
+      };
+      const txt  = (str, x, ty, align = "left") => doc.text(String(str ?? ""), x, ty, { align });
+      const line = (x1, y1, x2, y2, w = 0.2, rgb = GRY) => {
+        setDraw(rgb); doc.setLineWidth(w); doc.line(x1, y1, x2, y2);
+      };
+      const fillRect = (x, ry, rw, rh, fillRgb) => {
+        setFill(fillRgb); doc.rect(x, ry, rw, rh, "F");
+      };
+      const ensureSpace = (needed) => {
+        if (y + needed > PH - M) { doc.addPage(); y = M; }
+      };
 
       let y = M;
 
-      const setColor = (rgb) => { doc.setTextColor(...rgb); };
-      const setFill  = (rgb) => { doc.setFillColor(...rgb); };
-      const setDraw  = (rgb) => { doc.setDrawColor(...rgb); };
-      const font     = (style = "normal", size = 8) => { doc.setFont("helvetica", style); doc.setFontSize(size); };
-      const text     = (str, x, ty, align = "left") => doc.text(String(str || ""), x, ty, { align });
-      const line     = (x1, y1, x2, y2, w = 0.2, rgb = GRY) => {
-        setDraw(rgb); doc.setLineWidth(w); doc.line(x1, y1, x2, y2);
-      };
-      const rect = (x, rx, rw, rh, fillRgb, strokeRgb = null) => {
-        setFill(fillRgb);
-        if (strokeRgb) { setDraw(strokeRgb); doc.rect(x, rx, rw, rh, "FD"); }
-        else doc.rect(x, rx, rw, rh, "F");
-      };
-      const ensureSpace = (neededHeight = 0) => {
-        if (y + neededHeight > PH - M) { doc.addPage(); y = M; }
-      };
+      // ── FIX 1: async logo load so we get real pixel dimensions ─────────────
+      let logoW = 0, logoH = 0;
+      if (logoImage) {
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxW = 40, maxH = 20;
+            const ratio = img.naturalWidth / (img.naturalHeight || 1);
+            if (ratio >= maxW / maxH) {
+              logoW = maxW; logoH = maxW / ratio;
+            } else {
+              logoH = maxH; logoW = maxH * ratio;
+              if (logoW > maxW) { logoW = maxW; logoH = maxW / ratio; }
+            }
+            resolve();
+          };
+          img.onerror = resolve;
+          img.src = logoImage;
+        });
+      }
 
-      const cell = (x, cy, w, h, str, opts = {}) => {
-        const {
-          align = "center", bold = false, size = 6, fg = BLK,
-          bg = null, borderB = false, borderR = false, borderColor = GRY, padding = 1,
-        } = opts;
-        if (bg) { rect(x, cy, w, h, bg); }
-        if (borderB) { line(x, cy + h, x + w, cy + h, 0.1, borderColor); }
-        if (borderR) { line(x + w, cy, x + w, cy + h, 0.15, borderColor); }
-        font(bold ? "bold" : "normal", size);
-        setColor(fg);
-        const tx = align === "center" ? x + w / 2 : align === "right" ? x + w - padding : x + padding;
-        text(str, tx, cy + h - padding - 0.5, align);
-      };
+      // ── Company header ─────────────────────────────────────────────────────
+      const headerY = y;
+      const logoMargin = 8;
+      
+      if (logoImage && logoW > 0) {
+        const logoX = PW / 2 - logoW / 2 - 60;
+        const logoY = headerY + 4;
+        try { doc.addImage(logoImage, "PNG", logoX, logoY, logoW, logoH); }
+        catch (e) { console.warn("Logo add failed:", e); }
+      }
+      
+      font("normal", 7); setColor(BLK);
+      txt(companyName,                         PW / 2, headerY + 6,  "center");
+      txt(companyAddress,                      PW / 2, headerY + 10, "center");
+      txt(companyCity,                         PW / 2, headerY + 14, "center");
+      txt(`Tel: ${companyPhone} | ${website}`, PW / 2, headerY + 18, "center");
+      y = headerY + 25;
 
-      /* PAYSLIP TITLE */
-      font("bold", 18);
-      setColor(NAVY);
-      text("PAYSLIP", PW / 2, y + 10, "center");
-      y += 13;
+      // ── PAYSLIP title ──────────────────────────────────────────────────────
+      font("normal", 12); setColor(NAVY);
+      txt("PAYSLIP", PW / 2, y + 4, "center");
+      y += 12;
 
-      const LCW  = 35;
-      const PSUMW = 65;
-      const TFW  = CW - LCW - PSUMW;
-      const lx   = M;
-      const tfx  = M + LCW;
-      const psx  = M + LCW + TFW;
+      // ── Column layout constants ────────────────────────────────────────────
+      const LCW   = 35;               // left label column width
+      const PSUMW = 68;               // pay-summary column width (right)
+      const TFW   = CW - LCW - PSUMW; // timeframe middle column width
+      const lx    = M;
+      const tfx   = M + LCW;
+      const psx   = M + LCW + TFW;
       const ROW_H = 4.2;
 
-      font("bold", 7.5);
-      setColor(BLK);
-      text("NAME OF EMPLOYEE", lx + LCW / 2, y + 3, "center");
-      font("normal", 7);
-      setColor(BLK);
-      text(employeeName, lx + LCW / 2, y + 7, "center");
+      // ── Employee name + period header (above the grid) ─────────────────────
+      font("bold", 7.5); setColor(BLK);
+      txt("NAME OF EMPLOYEE", lx + LCW / 2, y + 3, "center");
+      txt("Timeframe",         tfx + 1,      y + 3, "left");
+      const submittedLabel = `Submitted on ${new Date().toLocaleDateString("en-US", {
+        year: "numeric", month: "long", day: "numeric",
+      })}`;
+      font("bold", 11); txt(submittedLabel, tfx + TFW - 2, y + 3, "right");
 
-      font("bold", 7.5);
-      setColor(BLK);
-      text("Timeframe", tfx + 1, y + 3, "left");
-      const submittedLabel = `Submitted on ${new Date().toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" })}`;
-      font("bold", 7);
-      text(submittedLabel, tfx + TFW, y + 3, "right");
-      font("normal", 7);
-      setColor(BLK);
+      font("normal", 7); setColor(BLK);
       const weekLabel = currentPaySlip
-        ? `${MONTHS[currentPaySlip.month]} ${currentPaySlip.year} – ${currentPaySlip.periodLabel}`
+        ? `Week of ${MONTHS[currentPaySlip.month]} ${new Date(currentPaySlip.startDate).getUTCDate()}-${new Date(currentPaySlip.endDate).getUTCDate()}, ${currentPaySlip.year}`
         : "N/A";
-      text(weekLabel, tfx + 1, y + 7, "left");
+      txt(employeeName, lx + LCW / 2, y + 7, "center");
+      txt(weekLabel,    tfx + 1,      y + 7, "left");
       y += 10;
 
-      const COL_PCT   = [0.13, 0.13, 0.13, 0.11, 0.11, 0.11, 0.05, 0.13];
+      // ── TF column widths ───────────────────────────────────────────────────
+      const COL_PCT   = [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.04, 0.14];
       const colWidths = COL_PCT.map(p => p * TFW);
 
-      const buildTFRow   = (dates, count, tail = "") => {
-        const row = [...dates];
+      const buildTFRow = (arr, count, tail = "") => {
+        const row = [...arr];
         while (row.length < count) row.push("");
-        while (row.length < 7)     row.push("");
+        while (row.length < 7)    row.push("");
         row.push(tail || "");
         return row;
       };
-      const buildTotRow  = (grand) => ["","","","","","","Grand Total Hours", grand];
 
-      const WEEK1_DAY_NAMES = buildTFRow(tableData.week1DayLabels, 5);
-      const WEEK2_DAY_NAMES = buildTFRow(tableData.week2DayLabels, 6);
-      const WEEK3_DAY_NAMES = buildTFRow(tableData.week3DayLabels, 6);
-
-      const leftLabelsArray = [];
-      const leftBoldArray   = [];
-      const leftBlueArray   = [];
-      const tfRows          = [];
+      const leftLabelsArr = [];
+      const leftBoldArr   = [];
+      const leftBlueArr   = [];
+      const tfRows        = [];
 
       if (tableData.week1DayLabels.length > 0) {
-        leftLabelsArray.push("Day", "Date", "Time Management");
-        leftBoldArray.push(false, false, true);
-        leftBlueArray.push(false, false, false);
+        leftLabelsArr.push("Day", "Date", "Time Management");
+        leftBoldArr.push(false, false, true); leftBlueArr.push(false, false, false);
         tfRows.push(
-          { cells: WEEK1_DAY_NAMES,                                                         bold:true,  bg:null, fg:BLK },
-          { cells: buildTFRow(tableData.week1Dates, 5, "Weekly Total Hours"),               bold:true,  bg:null, fg:BLK },
-          { cells: buildTFRow(tableData.week1Hours, 5, tableData.weekSubtotals[0]),         bold:false, bg:null, fg:BLK },
+          { cells: buildTFRow(tableData.week1DayLabels, 5),                                           bold: true  },
+          { cells: buildTFRow(tableData.week1Dates,     5, "Weekly Total Hours"),                     bold: true  },
+          { cells: buildTFRow(tableData.week1Hours,     5, tableData.weekSubtotals[0]),               bold: false },
         );
       }
       if (tableData.week2DayLabels.length > 0) {
-        leftLabelsArray.push("Day", "Date", "Time Management");
-        leftBoldArray.push(false, false, true);
-        leftBlueArray.push(false, false, false);
+        leftLabelsArr.push("Day", "Date", "Time Management");
+        leftBoldArr.push(false, false, true); leftBlueArr.push(false, false, false);
         tfRows.push(
-          { cells: WEEK2_DAY_NAMES,                                                         bold:true,  bg:null, fg:BLK },
-          { cells: buildTFRow(tableData.week2Dates, 6, "Weekly Total Hours"),               bold:true,  bg:null, fg:BLK },
-          { cells: buildTFRow(tableData.week2Hours, 6, tableData.weekSubtotals[1]),         bold:false, bg:null, fg:BLK },
+          { cells: buildTFRow(tableData.week2DayLabels, 6),                                           bold: true  },
+          { cells: buildTFRow(tableData.week2Dates,     6, "Weekly Total Hours"),                     bold: true  },
+          { cells: buildTFRow(tableData.week2Hours,     6, tableData.weekSubtotals[1]),               bold: false },
         );
       }
       if (tableData.week3DayLabels.length > 0) {
-        leftLabelsArray.push("Day", "Date", "Time Management");
-        leftBoldArray.push(false, false, true);
-        leftBlueArray.push(false, false, false);
+        leftLabelsArr.push("Day", "Date", "Time Management");
+        leftBoldArr.push(false, false, true); leftBlueArr.push(false, false, false);
         tfRows.push(
-          { cells: WEEK3_DAY_NAMES,                                                         bold:true,  bg:null, fg:BLK },
-          { cells: buildTFRow(tableData.week3Dates, 6, "Weekly Total Hours"),               bold:true,  bg:null, fg:BLK },
-          { cells: buildTFRow(tableData.week3Hours, 6, tableData.weekSubtotals[2]),         bold:false, bg:null, fg:BLK },
+          { cells: buildTFRow(tableData.week3DayLabels, 6),                                           bold: true  },
+          { cells: buildTFRow(tableData.week3Dates,     6, "Weekly Total Hours"),                     bold: true  },
+          { cells: buildTFRow(tableData.week3Hours,     6, tableData.weekSubtotals[2]),               bold: false },
         );
       }
-      leftLabelsArray.push("Total hrs");
-      leftBoldArray.push(true);
-      leftBlueArray.push(true);
-      tfRows.push({ cells: buildTotRow(tableData.totals[2]), bold:true, bg:null, fg:NAVY });
+      leftLabelsArr.push("Total hrs");
+      leftBoldArr.push(true); leftBlueArr.push(true);
+      tfRows.push({ cells: ["","","","","","","Total Hours", tableData.totals[2]], bold: true });
 
-      const LEFT_LABELS = leftLabelsArray;
-      const LEFT_BOLD   = leftBoldArray;
-      const LEFT_BLUE   = leftBlueArray;
+      // ── FIX 2: save shared baseline Y BEFORE drawing either column ─────────
+      const tfGridStartY = y;
 
+      // Draw TF rows (updates y)
       tfRows.forEach((row, ri) => {
         let cx = tfx;
-        if (ri === 9) { line(tfx, y, tfx + TFW, y, 0.1, LGRY); }
-        font(LEFT_BOLD[ri] ? "bold" : "normal", 6.5);
-        setColor(LEFT_BLUE[ri] ? NAVY : BLK);
-        text(LEFT_LABELS[ri], lx + LCW / 2, y + ROW_H - 1, "center");
+        font(leftBoldArr[ri] ? "bold" : "normal", 6.5);
+        setColor(leftBlueArr[ri] ? NAVY : BLK);
+        txt(leftLabelsArr[ri], lx + LCW / 2, y + ROW_H - 1, "center");
+
         row.cells.forEach((cellVal, ci) => {
-          const cw        = colWidths[ci];
-          const isSpacer  = ci === 6 && ri !== 9;
-          if (!isSpacer) {
-            const isGrandTotalValue = ri === 9 && ci === 7;
-            const isWeeklyTotalLabel = ci === 7 && (ri === 1 || ri === 4 || ri === 7);
-            cell(cx, y, cw, ROW_H, cellVal, {
-              align:"center",
-              bold: row.bold || (ci === 7 && ri >= 2),
-              size: isGrandTotalValue ? 7.5 : 6,
-              fg:   ri === 9 ? NAVY : (isWeeklyTotalLabel ? NAVY : row.fg),
-              bg:   row.bg ?? null,
-              borderB: true,
-              borderR: false,
-              borderColor: LGRY,
-            });
-          }
+          const cw       = colWidths[ci];
+          const isSpacer = ci === 6 && ri !== tfRows.length - 1;
+          if (isSpacer) { cx += cw; return; }
+          const isTotal     = ri === tfRows.length - 1;
+          const isWeeklyLbl = ci === 7 && (ri === 1 || ri === 4 || ri === 7);
+          font(
+            row.bold || (ci === 7 && ri >= 2) ? "bold" : "normal",
+            isTotal && ci === 7 ? 7.5 : 6,
+          );
+          setColor(isTotal ? NAVY : isWeeklyLbl ? NAVY : BLK);
+          txt(cellVal, cx + cw / 2, y + ROW_H - 1, "center");
+          line(cx, y + ROW_H, cx + cw, y + ROW_H, 0.1, LGRY);
           cx += cw;
         });
         y += ROW_H;
       });
 
-      /* ── PAY SUMMARY ── */
-      const cashAdvDeduct = cashAdvance.toFixed(2);
-      const netPayVal     = effectiveNetPayAfterCashAdvance;
+      const tfGridEndY = y; // bottom of TF grid
 
+      // ── FIX 3: Pay Summary — starts at tfGridStartY, never hacked ─────────
       const psRows = [
-        { label:"Billing Rate (hourly)",   value:`P${effectiveHourlyRate.toFixed(2)}`,    labelRed:false, valueRed:false },
-        { label:"Basic Pay",               value:`P${effectiveBasicPay.toFixed(2)}`,       labelRed:true,  valueRed:false },
-        { label:"Undertime Deduction",     value:`P${undertimeDeduct.toFixed(2)}`,         labelRed:true,  valueRed:true  },
+        { label: "Billing Rate (hourly)",   value: `P${effectiveHourlyRate.toFixed(2)}`,             red: false              },
+        { label: "Basic Pay",               value: `P${effectiveBasicPay.toFixed(2)}`,               red: true               },
+        { label: "Undertime Deduction",     value: `P${undertimeDeduct.toFixed(2)}`,                 red: true, redVal: true },
         ...(showGovDeductions ? [
-          { label:"SSS Contribution",        value:`P${sssDeduction.toFixed(2)}`,          labelRed:true,  valueRed:true  },
-          { label:"PhilHealth Premium",      value:`P${philhealthDeduction.toFixed(2)}`,   labelRed:true,  valueRed:true  },
-          { label:"Pag-IBIG Contribution",   value:`P${pagibigDeduction.toFixed(2)}`,      labelRed:true,  valueRed:true  },
+          { label: "SSS Contribution",      value: `P${sssDeduction.toFixed(2)}`,                    red: true, redVal: true },
+          { label: "PhilHealth Premium",    value: `P${philhealthDeduction.toFixed(2)}`,             red: true, redVal: true },
+          { label: "Pag-IBIG Contribution", value: `P${pagibigDeduction.toFixed(2)}`,                red: true, redVal: true },
         ] : []),
-        { label:"Cash Advance Deduction",  value:`P${cashAdvDeduct}`,                     labelRed:true,  valueRed:true  },
-        { label:"Subsidy",                 value:`P${subsidyValue.toFixed(2)}`,            labelRed:false, valueRed:false },
-        { label:"Total Out of Town",       value:`P${outOfTownTotal.toFixed(2)}`,          labelRed:false, valueRed:false },
-        { label:"Net Pay",                 value:`P${netPayVal.toFixed(2)}`,               labelRed:false, valueRed:false, netPay:true },
+        { label: "Cash Advance Deduction",  value: `P${cashAdvance.toFixed(2)}`,                     red: true, redVal: true },
+        { label: "Subsidy",                 value: `P${subsidyValue.toFixed(2)}`,                    red: false              },
+        { label: "Total Out of Town",       value: `P${outOfTownTotal.toFixed(2)}`,                  red: false              },
+        { label: "Net Pay",                 value: `P${effectiveNetPayAfterCashAdvance.toFixed(2)}`, red: false, netPay: true },
       ];
 
-      const psy0 = y - ROW_H * 10;
-      let   psy  = psy0;
+      // divider just before the non-deduction rows (Subsidy onward)
+      const dividerIdx = psRows.findIndex(r => r.label === "Subsidy");
+
+      let psy = tfGridStartY;
       psRows.forEach((row, ri) => {
-        if (ri === 5) { line(psx, psy, psx + PSUMW, psy, 0.3, GRY); psy += 1.5; }
-        font(row.labelRed ? "bold" : "normal", 6.5);
-        setColor(row.labelRed ? RED : BLK);
-        text(row.label, psx + 1, psy + 3.8, "left");
-        font("bold", row.netPay ? 8 : 6.5);
-        setColor(row.valueRed ? RED : BLK);
-        text(row.value, psx + PSUMW - 1, psy + 3.8, "right");
-        psy += 5;
+        if (ri === dividerIdx) {
+          line(psx, psy, psx + PSUMW, psy, 0.3, GRY);
+          psy += 2;
+        }
+        font(row.red ? "bold" : "normal", row.netPay ? 7.5 : 6.5);
+        setColor(row.red ? RED : BLK);
+        txt(row.label, psx + 1, psy + 3.5, "left");
+        font("bold", row.netPay ? 8.5 : 6.5);
+        setColor(row.redVal ? RED : BLK);
+        txt(row.value, psx + PSUMW - 1, psy + 3.5, "right");
+        psy += 4.8;
       });
 
-      y += 4;
-      line(M, y, M + CW, y, 0.3, GRY);
-      y += 3;
-      font("bold", 7);
-      setColor(BLK);
-      text("Breakdown", M, y + 2.5, "left");
-      y += 5;
+      // FIX 4: advance y past whichever column (TF or Pay Summary) is taller
+      y = Math.max(tfGridEndY, psy) + 5;
 
-      if (tableData.breakdownBlocks.some(block => block.length > 0)) {
-        const blocks = tableData.breakdownBlocks;
-        const totals = [tableData.totals[0], tableData.totals[1]];
+      // ── Section divider ────────────────────────────────────────────────────
+      line(M, y, M + CW, y, 0.3, GRY); y += 3;
+      font("bold", 7); setColor(BLK);
+      txt("Breakdown", M, y + 2.5, "left");
+      y += 6;
 
+      // ── Breakdown blocks ───────────────────────────────────────────────────
+      if (tableData.breakdownBlocks.some(b => b.length > 0)) {
         const BD_COLS = ["Day","Time-In (PST)","Break","Resume","Time-Out (PST)","Total Hours","Remarks"];
         const BD_PCT  = [0.13, 0.17, 0.13, 0.13, 0.17, 0.12, 0.15];
         const bdColW  = BD_PCT.map(p => p * CW);
 
-        blocks.forEach((block, bi) => {
-          const drawBlockHeader = () => {
-            let cxh = M;
-            bdColW.forEach((cw, ci) => {
-              rect(cxh, y, cw, 4, [240, 240, 240]);
-              line(cxh, y + 4, cxh + cw, y + 4, 0.08, BLK);
-              font("normal", 5.5);
-              setColor(BLK);
-              text(BD_COLS[ci], cxh + cw / 2, y + 3, "center");
-              cxh += cw;
-            });
-            y += 4;
-          };
+        const drawBDHeader = () => {
+          let cxh = M;
+          bdColW.forEach((cw, ci) => {
+            fillRect(cxh, y, cw, 4, [240, 240, 240]);
+            line(cxh, y + 4, cxh + cw, y + 4, 0.08, BLK);
+            font("normal", 5.5); setColor(BLK);
+            txt(BD_COLS[ci], cxh + cw / 2, y + 3, "center");
+            cxh += cw;
+          });
+          y += 4;
+        };
+
+        tableData.breakdownBlocks.forEach((block, bi) => {
           ensureSpace(8);
-          drawBlockHeader();
+          drawBDHeader();
 
           block.forEach((day) => {
             ensureSpace(5);
-            if (y + 5 > PH - M) { doc.addPage(); y = M; drawBlockHeader(); }
+            if (y + 5 > PH - M) { doc.addPage(); y = M; drawBDHeader(); }
             const hasTime = hasWorkedTime(day) && day.status !== "absent";
             const key     = new Date(day.date).toISOString().slice(0, 10);
             const remark  = (remarksByDate && remarksByDate[key]) ? String(remarksByDate[key]) : "";
             const cells   = [
               day.dayOfWeek || "",
-              hasTime ? formatTime12(day.timeIn)       : "",
+              hasTime ? formatTime12(day.timeIn)            : "",
               hasTime ? (formatTime12(day.breakTime) || "") : "",
-              hasTime ? (formatTime12(day.resume) || "")   : "",
-              hasTime ? (formatTime12(day.timeOut) || "")  : "",
+              hasTime ? (formatTime12(day.resume)    || "") : "",
+              hasTime ? formatTime12(day.timeOut)           : "",
               hasTime ? getDayRenderedHours(day).toFixed(2) : "",
               remark,
             ];
             let cx = M;
             cells.forEach((val, ci) => {
-              font("normal", 5.5);
-              setColor(BLK);
-              text(val, cx + bdColW[ci] / 2, y + 3, "center");
+              font("normal", 5.5); setColor(BLK);
+              txt(val, cx + bdColW[ci] / 2, y + 3, "center");
               line(cx, y + 3.8, cx + bdColW[ci], y + 3.8, 0.08, BLK);
               cx += bdColW[ci];
             });
@@ -841,71 +922,70 @@ export default function PaySlipGenerator() {
           ensureSpace(5);
           y += 0.15;
           line(M, y, M + CW, y, 0.08, BLK);
-          const timeOutLeft      = M + bdColW.slice(0, 4).reduce((a, b) => a + b, 0);
-          const timeOutRight     = timeOutLeft + bdColW[4];
-          const totalHoursLeft   = timeOutRight;
-          const totalHoursRight  = totalHoursLeft + bdColW[5];
-          const remarksDividerX  = totalHoursRight;
-          font("bold", 5.5);
-          setColor(BLK);
-          text("Total Hours Spent", timeOutRight - 1,  y + 2.6, "right");
-          text(totals[bi],          totalHoursRight - 1, y + 2.6, "right");
-          line(totalHoursLeft,  y, totalHoursLeft,  y + 3.2, 0.08, BLK);
-          line(remarksDividerX, y, remarksDividerX, y + 3.2, 0.08, BLK);
+
+          // FIX 5: correct column boundary X positions for the footer row
+          const col4end = M + bdColW.slice(0, 4).reduce((a, b) => a + b, 0);
+          const col5end = col4end + bdColW[4];
+          const col6end = col5end + bdColW[5];
+
+          font("bold", 5.5); setColor(BLK);
+          txt("Total Hours Spent", col5end - 1,  y + 2.6, "right");
+          txt(tableData.totals[bi], col6end - 1, y + 2.6, "right");
+          line(col5end, y, col5end, y + 3.2, 0.08, BLK);
+          line(col6end, y, col6end, y + 3.2, 0.08, BLK);
           line(M, y + 3.2, M + CW, y + 3.2, 0.08, BLK);
           y += 3.5;
         });
       }
 
-      /* SIGNATURES */
-      ensureSpace(20);
-      y += 4;
-      line(M, y, M + CW, y, 0.2, GRY);
-      y += 5;
-      font("bold", 7);
-      setColor(BLK);
-      text("Prepared By:", M, y, "left");
+      // ── Signatures ─────────────────────────────────────────────────────────
+      y += 8;
+      const sigY  = y;
+      const prepX = M;
+      const app1X = M + 85;
+      const app2X = M + 160;
+
+      font("bold", 7); setColor(BLK);
+      txt("Prepared By:", prepX, sigY, "left");
       font("normal", 7);
-      const prepName = (preparedBy && preparedBy.trim()) ? preparedBy.trim() : employeeName;
-      text(prepName, M + 23, y, "left");
+      txt((preparedBy?.trim()) || employeeName, prepX + 25, sigY, "left");
 
-      font("bold", 7);
-      text("Approved By:", M + 85, y, "left");
-      const approvedName = "Joel V. Agsaoay";
-      font("bold", 7);
-      setColor(BLK);
-      text(approvedName, M + 85 + 23, y, "left");
-      const nameW = doc.getTextWidth(approvedName);
-      line(M + 85 + 23, y + 0.5, M + 85 + 23 + nameW, y + 0.5, 0.3, BLK);
+      if (showApprovedBy1) {
+        font("bold", 7); setColor(BLK);
+        txt("Approved By:", app1X, sigY, "left");
+        const n1 = (approvedBy1?.trim()) || "Joel V. Agsaoay";
+        font("bold", 7); txt(n1, app1X + 25, sigY, "left");
+        const w1 = doc.getTextWidth(n1);
+        line(app1X + 25, sigY + 0.5, app1X + 25 + w1, sigY + 0.5, 0.3, BLK);
+        font("normal", 6); setColor(BLK);
+        txt("President/CEO", app1X + 25 + w1 / 2, sigY + 5, "center");
+      }
 
-      const secondX = M + 85 + 85;
-      font("bold", 7);
-      setColor(BLK);
-      text("Approved By:", secondX, y, "left");
-      const vpName = "Emmanuel A. Reonal";
-      font("bold", 7);
-      text(vpName, secondX + 23, y, "left");
-      const vpW = doc.getTextWidth(vpName);
-      line(secondX + 23, y + 0.5, secondX + 23 + vpW, y + 0.5, 0.3, BLK);
+      if (showApprovedBy2) {
+        const x2 = showApprovedBy1 ? app2X : app1X;
+        font("bold", 7); setColor(BLK);
+        txt("Approved By:", x2, sigY, "left");
+        const n2 = (approvedBy2?.trim()) || "Emmanuel A. Reonal";
+        font("bold", 7); txt(n2, x2 + 25, sigY, "left");
+        const w2 = doc.getTextWidth(n2);
+        line(x2 + 25, sigY + 0.5, x2 + 25 + w2, sigY + 0.5, 0.3, BLK);
+        font("normal", 6); setColor(BLK);
+        txt("EVP / Vice President", x2 + 25 + w2 / 2, sigY + 5, "center");
+      }
 
-      y += 5;
-      font("normal", 6.5);
-      setColor(BLK);
-      const presCenterX = (M + 85 + 23) + (nameW / 2);
-      text("President/CEO",         presCenterX, y, "center");
-      const vpCenterX   = (secondX + 23) + (vpW / 2);
-      text("EVP / Vice President",  vpCenterX,   y, "center");
-
-      y += 6;
-      font("bold", 7);
-      text("Received By:", M, y, "left");
+      y += 14;
+      font("bold", 7); setColor(BLK);
+      txt("Received By:", M, y, "left");
       font("normal", 7);
-      text(employeeName, M + 23, y, "left");
+      txt(employeeName, M + 25, y, "left");
 
+      // ── Save ───────────────────────────────────────────────────────────────
       const fileName = currentPaySlip
         ? `PaySlip_${employeeName.replace(/\s+/g, "_")}_${MONTHS[currentPaySlip.month]}_${currentPaySlip.year}.pdf`
         : `PaySlip_${employeeName.replace(/\s+/g, "_")}.pdf`;
+
       doc.save(fileName);
+
       if (currentPaySlip?.year !== undefined && currentPaySlip?.month !== undefined) {
         incrementPaySlipDownloadCounter(currentPaySlip.year, currentPaySlip.month);
       }
@@ -918,36 +998,37 @@ export default function PaySlipGenerator() {
   };
 
   /* ── screen styles ── */
-  const NAVY_CSS  = "#132440";
-  const RED_CSS   = "#A72703";
-  const BLUE_CSS  = "#1a3a8f";
+  const NAVY_CSS = "#132440";
+  const RED_CSS  = "#A72703";
+  const BLUE_CSS = "#1a3a8f";
 
   const panelStyle = {
-    width:"240px", flexShrink:0, background:"#fff", borderRadius:"12px",
-    padding:"16px", boxShadow:"0 2px 12px rgba(0,0,0,.09)",
-    fontFamily:"'DM Sans',sans-serif",
+    width: "240px", flexShrink: 0, background: "#fff", borderRadius: "12px",
+    padding: "16px", boxShadow: "0 2px 12px rgba(0,0,0,.09)",
+    fontFamily: "'DM Sans',sans-serif",
   };
-  const fgStyle  = { display:"flex", flexDirection:"column", gap:"4px", marginBottom:"10px" };
-  const lblStyle = { fontSize:"10px", fontWeight:"700", color:NAVY_CSS, textTransform:"uppercase", letterSpacing:".07em" };
+  const fgStyle  = { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "10px" };
+  const lblStyle = { fontSize: "10px", fontWeight: "700", color: NAVY_CSS, textTransform: "uppercase", letterSpacing: ".07em" };
   const selStyle = {
-    padding:"7px 9px", border:"2px solid #e8dfd6", borderRadius:"7px",
-    fontFamily:"'DM Sans',sans-serif", fontSize:"12px", color:NAVY_CSS,
-    background:"#fff", outline:"none",
+    padding: "7px 9px", border: "2px solid #e8dfd6", borderRadius: "7px",
+    fontFamily: "'DM Sans',sans-serif", fontSize: "12px", color: NAVY_CSS,
+    background: "#fff", outline: "none",
   };
   const btnStyle = {
-    width:"100%", padding:"10px",
+    width: "100%", padding: "10px",
     background: pdfLoading ? "#888" : hovPrint ? "#8a1f02" : RED_CSS,
-    color:"#fff", border:"none", borderRadius:"8px",
-    fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:"700",
+    color: "#fff", border: "none", borderRadius: "8px",
+    fontFamily: "'DM Sans',sans-serif", fontSize: "12px", fontWeight: "700",
     cursor: pdfLoading ? "not-allowed" : "pointer",
-    display:"flex", alignItems:"center", justifyContent:"center", gap:"6px",
+    display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+    marginTop: "8px",
   };
   const tftd = (extra = {}) => ({
-    border:"none", padding:"0 2px", textAlign:"center", height:"11px",
-    verticalAlign:"middle", fontSize:"6.5pt", fontFamily:"Arial,sans-serif", ...extra,
+    border: "none", padding: "0 2px", textAlign: "center", height: "11px",
+    verticalAlign: "middle", fontSize: "6.5pt", fontFamily: "Arial,sans-serif", ...extra,
   });
 
-  const expandEmployeeSelect  = (e) => { if (employees.length > 8) e.target.size = 8; };
+  const expandEmployeeSelect   = (e) => { if (employees.length > 8) e.target.size = 8; };
   const collapseEmployeeSelect = (e) => { e.target.size = 1; };
 
   const handleCashAdvanceChange = (e) => {
@@ -962,211 +1043,271 @@ export default function PaySlipGenerator() {
   const handleSubsidyChange = (e) => { setSubsidy(parseFloat(e.target.value) || 0); };
   const handleRemarkChange  = (id, val) => { setRemarksByDate(prev => ({ ...prev, [id]: val })); };
 
+  const deductionsBadge = (cashAdvance > 0 || subsidy > 0 || totalGovDeductions > 0) ? "edited" : null;
+
   return (
-    <div style={{ fontFamily:"'DM Sans',sans-serif", display:"flex", gap:"18px", alignItems:"flex-start", flexWrap:"nowrap", overflowX:"auto" }}>
+    <div style={{ fontFamily: "'DM Sans',sans-serif", display: "flex", gap: "18px", alignItems: "flex-start", flexWrap: "nowrap", overflowX: "auto" }}>
 
       {/* ══ CONTROL PANEL ══ */}
       <div className="no-print" style={panelStyle}>
         {loading ? (
-          <div style={{ padding:"20px" }}>
-            <FormShimmer fieldCount={6} />
-          </div>
+          <div style={{ padding: "20px" }}><FormShimmer fieldCount={6} /></div>
         ) : (
           <>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"15px", fontWeight:"700", color:NAVY_CSS, marginBottom:"12px", paddingBottom:"6px", borderBottom:`2px solid ${RED_CSS}` }}>
+            <div style={{
+              fontFamily: "'Playfair Display',serif", fontSize: "15px", fontWeight: "700",
+              color: NAVY_CSS, marginBottom: "12px", paddingBottom: "6px",
+              borderBottom: `2px solid ${RED_CSS}`,
+            }}>
               Generate Pay Slip
             </div>
 
             {error && (
-              <div style={{ background:"#fee2e2", color:"#991b1b", padding:"10px", borderRadius:"5px", marginBottom:"10px", fontSize:"12px" }}>
+              <div style={{ background: "#fee2e2", color: "#991b1b", padding: "10px", borderRadius: "5px", marginBottom: "10px", fontSize: "12px" }}>
                 {error}
               </div>
             )}
 
-            <div style={fgStyle}>
-              <label style={lblStyle}>Year</label>
-              <select style={selStyle} value={year} onChange={e => setYear(parseInt(e.target.value))}>
-                {[2024,2025,2026,2027,2028,2029,2030].map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
+            {/* ── 1. Pay Period ── */}
+            <AccordionSection title="Pay Period" icon="◷" defaultOpen={true}>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Year</label>
+                <select style={selStyle} value={year} onChange={e => setYear(parseInt(e.target.value))}>
+                  {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Month</label>
+                <select style={selStyle} value={month} onChange={e => setMonth(parseInt(e.target.value))}>
+                  {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Employee</label>
+                <select
+                  style={selStyle}
+                  value={selectedEmployee?._id || ""}
+                  disabled={!employees.length}
+                  size={1}
+                  onFocus={expandEmployeeSelect}
+                  onBlur={collapseEmployeeSelect}
+                  onChange={e => {
+                    const emp = employees.find(x => x._id === e.target.value);
+                    setSelectedEmployee(emp);
+                    resetCashAdvance();
+                    collapseEmployeeSelect(e);
+                  }}
+                >
+                  {employees.map(emp => (
+                    <option key={emp._id} value={emp._id}>
+                      {emp.firstName} {emp.middleInitial ? emp.middleInitial + ". " : ""}{emp.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Pay Period</label>
+                <select
+                  style={selStyle}
+                  value={selectedPeriod?.id || ""}
+                  disabled={!periods.length}
+                  onChange={e => {
+                    const p = periods.find(x => x.id === e.target.value);
+                    setSelectedPeriod(p);
+                    resetCashAdvance();
+                  }}
+                >
+                  {periods.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.label || p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </AccordionSection>
 
-            <div style={fgStyle}>
-              <label style={lblStyle}>Month</label>
-              <select style={selStyle} value={month} onChange={e => setMonth(parseInt(e.target.value))}>
-                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-              </select>
-            </div>
-
-            <div style={fgStyle}>
-              <label style={lblStyle}>Employee</label>
-              <select
-                style={selStyle}
-                value={selectedEmployee?._id || ""}
-                disabled={!employees.length}
-                size={1}
-                onFocus={expandEmployeeSelect}
-                onBlur={collapseEmployeeSelect}
-                onChange={e => {
-                  const emp = employees.find(x => x._id === e.target.value);
-                  setSelectedEmployee(emp);
-                  resetCashAdvance();
-                  collapseEmployeeSelect(e);
-                }}
-              >
-                {employees.map(emp => (
-                  <option key={emp._id} value={emp._id}>
-                    {emp.firstName} {emp.middleInitial ? emp.middleInitial + ". " : ""}{emp.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={fgStyle}>
-              <label style={lblStyle}>Pay Period</label>
-              <select
-                style={selStyle}
-                value={selectedPeriod?.id || ""}
-                disabled={!periods.length}
-                onChange={e => {
-                  const p = periods.find(x => x.id === e.target.value);
-                  setSelectedPeriod(p);
-                  resetCashAdvance();
-                }}
-              >
-                {periods.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-            </div>
-
-            {/* ── Government Deductions ── */}
-            <div style={{ background:"#f3f4f6", borderRadius:"8px", padding:"10px", marginBottom:"10px" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"8px" }}>
+            {/* ── 2. Allowances ── */}
+            <AccordionSection title="Allowances" icon="+" defaultOpen={subsidy > 0}>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Subsidy</label>
                 <input
-                  type="checkbox" id="showGovDeductions"
-                  checked={showGovDeductions}
-                  onChange={e => setShowGovDeductions(e.target.checked)}
-                  style={{ cursor:"pointer", width:"16px", height:"16px" }}
+                  type="number" style={{ ...selStyle, width: "100%" }}
+                  value={subsidy} onChange={handleSubsidyChange}
+                  placeholder="0.00" min="0" step="0.01"
                 />
-                <label htmlFor="showGovDeductions" style={{ fontSize:"11px", fontWeight:"700", color:NAVY_CSS, cursor:"pointer", textTransform:"uppercase" }}>
-                  Government Deductions
-                </label>
               </div>
+            </AccordionSection>
 
-              {showGovDeductions && (
-                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-                  {/* SSS */}
-                  <label style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"10px", color:"#555", cursor:"pointer" }}>
-                    <input
-                      type="checkbox" checked={applySSSDeduction}
-                      onChange={e => setApplySSSDeduction(e.target.checked)}
-                      style={{ cursor:"pointer", width:"14px", height:"14px" }}
-                    />
-                    SSS — ₱{sssDeduction.toFixed(2)}/payslip
-                    <span style={{ fontSize:"9px", color:"#9ca3af" }}>(₱{(sssDeduction * 2).toFixed(2)}/mo)</span>
+            {/* ── 3. Deductions ── */}
+            <AccordionSection title="Deductions" icon="⊖" badge={deductionsBadge}>
+              <div style={{ background: "#f3f4f6", borderRadius: "8px", padding: "10px", marginBottom: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <input type="checkbox" id="showGovDeductions" checked={showGovDeductions}
+                    onChange={e => setShowGovDeductions(e.target.checked)}
+                    style={{ cursor: "pointer", width: "16px", height: "16px" }} />
+                  <label htmlFor="showGovDeductions" style={{ fontSize: "10px", fontWeight: "700", color: NAVY_CSS, cursor: "pointer", textTransform: "uppercase" }}>
+                    Gov't Deductions
                   </label>
-                  {/* PhilHealth */}
-                  <label style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"10px", color:"#555", cursor:"pointer" }}>
-                    <input
-                      type="checkbox" checked={applyPhilHealthDeduction}
-                      onChange={e => setApplyPhilHealthDeduction(e.target.checked)}
-                      style={{ cursor:"pointer", width:"14px", height:"14px" }}
-                    />
-                    PhilHealth — ₱{philhealthDeduction.toFixed(2)}/payslip
-                    <span style={{ fontSize:"9px", color:"#9ca3af" }}>(₱{(philhealthDeduction * 2).toFixed(2)}/mo)</span>
-                  </label>
-                  {/* Pag-IBIG */}
-                  <label style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"10px", color:"#555", cursor:"pointer" }}>
-                    <input
-                      type="checkbox" checked={applyPagIbigDeduction}
-                      onChange={e => setApplyPagIbigDeduction(e.target.checked)}
-                      style={{ cursor:"pointer", width:"14px", height:"14px" }}
-                    />
-                    Pag-IBIG — ₱{pagibigDeduction.toFixed(2)}/payslip
-                    <span style={{ fontSize:"9px", color:"#9ca3af" }}>(₱{(pagibigDeduction * 2).toFixed(2)}/mo)</span>
-                  </label>
-                  <div style={{ borderTop:"1px solid #d1d5db", paddingTop:"6px", marginTop:"4px" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:"10px", fontWeight:"700", color:RED_CSS }}>
-                      <span>Total (this payslip)</span>
-                      <span>₱{totalGovDeductions.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:"9px", color:"#9ca3af", marginTop:"2px" }}>
-                      <span>Total (monthly est.)</span>
-                      <span>₱{(totalGovDeductions * 2).toFixed(2)}</span>
-                    </div>
-                  </div>
                 </div>
-              )}
-            </div>
-
-            <div style={fgStyle}>
-              <label style={lblStyle}>Cash Advance</label>
-              <input
-                type="number" style={{ ...selStyle, width:"100%" }}
-                value={cashAdvance}
-                onChange={handleCashAdvanceChange}
-                placeholder="0.00" min="0" step="0.01"
-              />
-            </div>
-
-            <div style={fgStyle}>
-              <label style={lblStyle}>Subsidy</label>
-              <input
-                type="number" style={{ ...selStyle, width:"100%" }}
-                value={subsidy}
-                onChange={handleSubsidyChange}
-                placeholder="0.00" min="0" step="0.01"
-              />
-            </div>
-
-            <div style={fgStyle}>
-              <label style={lblStyle}>Prepared By</label>
-              <input
-                type="text" style={{ ...selStyle, width:"100%" }}
-                value={preparedBy}
-                onChange={e => setPreparedBy(e.target.value)}
-                placeholder="Type preparer's name"
-              />
-            </div>
-
-            {currentPaySlip && (
-              <div style={{ background:"#f9f4ef", borderRadius:"7px", padding:"9px", marginBottom:"10px", fontSize:"10px" }}>
-                {[
-                  ["Employee",      employeeName],
-                  ["Rate",          `P${effectiveHourlyRate.toFixed(2)}/hr`],
-                  ["Basic Pay",     `P${effectiveBasicPay.toFixed(2)}`],
-                  ...(showGovDeductions ? [
-                    ["Gov Deductions", `P${totalGovDeductions.toFixed(2)}`],
-                  ] : []),
-                  ["Cash Adv",      `P${cashAdvance.toFixed(2)}`],
-                  ["Subsidy",       `P${subsidyValue.toFixed(2)}`],
-                  ["Net Pay",       `P${effectiveNetPayAfterCashAdvance.toFixed(2)}`],
-                ].map(([l, v], i) => (
-                  <div key={i} style={{ display:"flex", justifyContent:"space-between", marginBottom:"2px" }}>
-                    <span style={{ color:"#6b7280" }}>{l}</span>
-                    <span style={{ fontWeight:"700", color: l === "Net Pay" || l === "Gov Deductions" ? RED_CSS : NAVY_CSS }}>{v}</span>
+                {showGovDeductions && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", color: "#555", cursor: "pointer" }}>
+                      <input type="checkbox" checked={applySSSDeduction}
+                        onChange={e => setApplySSSDeduction(e.target.checked)}
+                        style={{ cursor: "pointer", width: "14px", height: "14px" }} />
+                      SSS — ₱{sssDeduction.toFixed(2)}/payslip
+                      <span style={{ fontSize: "9px", color: "#9ca3af" }}>(₱{(sssDeduction * 2).toFixed(2)}/mo)</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", color: "#555", cursor: "pointer" }}>
+                      <input type="checkbox" checked={applyPhilHealthDeduction}
+                        onChange={e => setApplyPhilHealthDeduction(e.target.checked)}
+                        style={{ cursor: "pointer", width: "14px", height: "14px" }} />
+                      PhilHealth — ₱{philhealthDeduction.toFixed(2)}/payslip
+                      <span style={{ fontSize: "9px", color: "#9ca3af" }}>(₱{(philhealthDeduction * 2).toFixed(2)}/mo)</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", color: "#555", cursor: "pointer" }}>
+                      <input type="checkbox" checked={applyPagIbigDeduction}
+                        onChange={e => setApplyPagIbigDeduction(e.target.checked)}
+                        style={{ cursor: "pointer", width: "14px", height: "14px" }} />
+                      Pag-IBIG — ₱{pagibigDeduction.toFixed(2)}/payslip
+                      <span style={{ fontSize: "9px", color: "#9ca3af" }}>(₱{(pagibigDeduction * 2).toFixed(2)}/mo)</span>
+                    </label>
+                    <div style={{ borderTop: "1px solid #d1d5db", paddingTop: "6px", marginTop: "4px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", fontWeight: "700", color: RED_CSS }}>
+                        <span>Total (this payslip)</span>
+                        <span>₱{totalGovDeductions.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#9ca3af", marginTop: "2px" }}>
+                        <span>Total (monthly est.)</span>
+                        <span>₱{(totalGovDeductions * 2).toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
-            )}
+              <div style={fgStyle}>
+                <label style={lblStyle}>Cash Advance</label>
+                <input
+                  type="number" style={{ ...selStyle, width: "100%" }}
+                  value={cashAdvance} onChange={handleCashAdvanceChange}
+                  placeholder="0.00" min="0" step="0.01"
+                />
+                {cashAdvanceLimit !== null && (
+                  <span style={{ fontSize: "9px", color: "#9ca3af" }}>
+                    Limit: ₱{Number(cashAdvanceLimit).toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </AccordionSection>
 
-            <button
-              style={btnStyle} disabled={pdfLoading}
+            {/* ── 4. Signatories ── */}
+            <AccordionSection title="Signatories" icon="✎">
+              <div style={fgStyle}>
+                <label style={lblStyle}>Prepared By</label>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={preparedBy} onChange={e => setPreparedBy(e.target.value)}
+                  placeholder="Preparer's name" />
+              </div>
+              <div style={fgStyle}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                  <input type="checkbox" id="ab1" checked={showApprovedBy1}
+                    onChange={e => setShowApprovedBy1(e.target.checked)}
+                    style={{ cursor: "pointer", width: "14px", height: "14px" }} />
+                  <label htmlFor="ab1" style={{ ...lblStyle, margin: 0 }}>Approver 1 (President)</label>
+                </div>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={approvedBy1} onChange={e => setApprovedBy1(e.target.value)}
+                  placeholder="Name" disabled={!showApprovedBy1} />
+              </div>
+              <div style={fgStyle}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                  <input type="checkbox" id="ab2" checked={showApprovedBy2}
+                    onChange={e => setShowApprovedBy2(e.target.checked)}
+                    style={{ cursor: "pointer", width: "14px", height: "14px" }} />
+                  <label htmlFor="ab2" style={{ ...lblStyle, margin: 0 }}>Approver 2 (EVP/VP)</label>
+                </div>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={approvedBy2} onChange={e => setApprovedBy2(e.target.value)}
+                  placeholder="Name" disabled={!showApprovedBy2} />
+              </div>
+            </AccordionSection>
+
+            {/* ── 5. Branding ── */}
+            <AccordionSection title="Branding" icon="◈">
+              <div style={fgStyle}>
+                <label style={lblStyle}>Logo</label>
+                {logoImage ? (
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <img src={logoImage} alt="Logo"
+                      style={{ width: "40px", height: "40px", objectFit: "contain", border: "1px solid #e8dfd6", borderRadius: "4px" }} />
+                    <button onClick={handleLogoRemove}
+                      style={{ padding: "6px 10px", background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5", borderRadius: "6px", fontSize: "11px", fontWeight: "600", cursor: "pointer", flex: 1 }}>
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input type="file" id="logo-upload" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
+                    <label htmlFor="logo-upload"
+                      style={{ display: "block", padding: "8px", background: "#f8fafc", border: "2px dashed #cbd5e1", borderRadius: "6px", textAlign: "center", cursor: "pointer", fontSize: "11px", color: "#64748b", fontWeight: "500" }}>
+                      Click to upload logo
+                    </label>
+                  </>
+                )}
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Company Name</label>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={companyName} onChange={e => setCompanyName(e.target.value)}
+                  placeholder="Company name" />
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Address</label>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={companyAddress} onChange={e => setCompanyAddress(e.target.value)}
+                  placeholder="Address" />
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>City</label>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={companyCity} onChange={e => setCompanyCity(e.target.value)}
+                  placeholder="City, Country, Zip" />
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Phone</label>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={companyPhone} onChange={e => setCompanyPhone(e.target.value)}
+                  placeholder="(XXX) XXX-XXXX" />
+              </div>
+              <div style={fgStyle}>
+                <label style={lblStyle}>Website</label>
+                <input type="text" style={{ ...selStyle, width: "100%" }}
+                  value={website} onChange={e => setWebsite(e.target.value)}
+                  placeholder="www.example.com" />
+              </div>
+            </AccordionSection>
+
+            {/* ── Download Button ── */}
+            <button style={btnStyle} disabled={pdfLoading}
               onMouseEnter={() => setHovPrint(true)}
               onMouseLeave={() => setHovPrint(false)}
               onClick={generatePDF}
             >
               {pdfLoading ? (
                 <>
-                  <svg style={{ animation:"spin .8s linear infinite" }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
-                    <path d="M12 2a10 10 0 0 1 0 20"/>
+                  <svg style={{ animation: "spin .8s linear infinite" }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
+                    <path d="M12 2a10 10 0 0 1 0 20" />
                   </svg>
                   Generating…
                 </>
               ) : (
                 <>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
-                    <polyline points="6 9 6 2 18 2 18 9"/>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                    <rect x="6" y="14" width="12" height="8"/>
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
                   </svg>
                   Download PDF
                 </>
@@ -1178,33 +1319,28 @@ export default function PaySlipGenerator() {
           @keyframes spin { to { transform: rotate(360deg) } }
           @media print {
             .remark-input {
-              border: none !important;
-              background: transparent !important;
-              box-shadow: none !important;
-              outline: none !important;
-              padding: 0 !important;
+              border: none !important; background: transparent !important;
+              box-shadow: none !important; outline: none !important; padding: 0 !important;
             }
           }
         `}</style>
       </div>
 
-      {/* ══ PAYSLIP DOCUMENT (screen) ══ */}
-      <div style={{ flex:1, overflowX:"auto", minWidth:0 }}>
+      {/* ══ PAYSLIP DOCUMENT (screen preview) ══ */}
+      <div style={{ flex: 1, overflowX: "auto", minWidth: 0 }}>
         {showCALimitModal && (
-          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:3000 }}>
-            <div style={{ background:"#fff", borderRadius:"14px", padding:"24px", width:"100%", maxWidth:"420px", boxShadow:"0 12px 48px rgba(0,0,0,.22)" }}>
-              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:"18px", fontWeight:700, color:"#132440", marginBottom:"8px" }}>Cash Advance Limit Exceeded</div>
-              <div style={{ fontSize:"13.5px", color:"#6b7280", lineHeight:1.6, marginBottom:"12px" }}>
-                The amount you entered exceeds your cash advance limit.
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3000 }}>
+            <div style={{ background: "#fff", borderRadius: "14px", padding: "24px", width: "100%", maxWidth: "420px", boxShadow: "0 12px 48px rgba(0,0,0,.22)" }}>
+              <div style={{ fontFamily: "'Playfair Display',serif", fontSize: "18px", fontWeight: 700, color: "#132440", marginBottom: "8px" }}>
+                Cash Advance Limit Exceeded
               </div>
-              <div style={{ fontSize:"13.5px", color:"#6b7280", lineHeight:1.6, marginBottom:"16px" }}>
-                Please enter an amount within your allowed limit of {`₱${Number(cashAdvanceLimit || 0).toFixed(2)}`}.
+              <div style={{ fontSize: "13.5px", color: "#6b7280", lineHeight: 1.6, marginBottom: "16px" }}>
+                The amount you entered exceeds your cash advance limit of{" "}
+                <strong>₱{Number(cashAdvanceLimit || 0).toFixed(2)}</strong>. It has been reset to the maximum allowed.
               </div>
-              <div style={{ display:"flex", justifyContent:"flex-end", gap:"8px" }}>
-                <button
-                  onClick={() => setShowCALimitModal(false)}
-                  style={{ padding:"9px 16px", borderRadius:"8px", border:"none", background:"#A72703", color:"#fff", fontWeight:700 }}
-                >
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={() => setShowCALimitModal(false)}
+                  style={{ padding: "9px 16px", borderRadius: "8px", border: "none", background: "#A72703", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                   OK
                 </button>
               </div>
@@ -1214,23 +1350,42 @@ export default function PaySlipGenerator() {
 
         {currentPaySlip ? (
           <div ref={psPageRef} className="ps-page" style={{
-            width:"1100px", maxWidth:"1100px", minWidth:"1100px",
-            background:"#fff", color:"#000",
-            fontFamily:"Arial,Helvetica,sans-serif",
-            fontSize:"7pt", padding:"16px 22px",
-            boxSizing:"border-box", lineHeight:1.3,
-            boxShadow:"0 3px 18px rgba(0,0,0,.3)",
+            width: "1100px", maxWidth: "1100px", minWidth: "1100px",
+            background: "#fff", color: "#000",
+            fontFamily: "Arial,Helvetica,sans-serif",
+            fontSize: "7pt", padding: "16px 22px",
+            boxSizing: "border-box", lineHeight: 1.3,
+            boxShadow: "0 3px 18px rgba(0,0,0,.3)",
           }}>
-            <div style={{ textAlign:"center", fontFamily:"Arial Black,Arial,sans-serif", fontSize:"16pt", fontWeight:"900", letterSpacing:".08em", margin:"2px 0 3px", color:BLUE_CSS }}>
-              PAYSLIP
+            {/* Company Information */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginBottom: "12px" }}>
+              {logoImage && (
+                <img src={logoImage} alt="Logo" style={{ height: "50px", width: "auto", maxHeight: "50px", objectFit: "contain" }} />
+              )}
+              <div style={{ textAlign: "center", fontSize: "7pt", color: "#000" }}>
+                <div style={{ marginBottom: "2px" }}>{companyName}</div>
+                <div style={{ marginBottom: "1px" }}>{companyAddress}</div>
+                <div style={{ marginBottom: "1px" }}>{companyCity}</div>
+                <div>Tel: {companyPhone} | {website}</div>
+              </div>
             </div>
 
-            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:"6px", margin:"4px 0 3px" }}>
+            {/* PAYSLIP Title */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "2px 0 8px" }}>
+              <div style={{ textAlign: "center", fontFamily: "Arial,Helvetica,sans-serif", fontSize: "12pt", fontWeight: "400", letterSpacing: ".06em", color: BLUE_CSS }}>
+                PAYSLIP
+              </div>
+            </div>
 
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", margin: "4px 0 3px" }}>
               {/* Left labels */}
-              <div style={{ width:"100px", flexShrink:0, textAlign:"center" }}>
-                <div style={{ fontSize:"7.5pt", fontWeight:"700", height:"12px", display:"flex", alignItems:"center", justifyContent:"center", margin:0, whiteSpace:"nowrap" }}>NAME OF EMPLOYEE</div>
-                <div style={{ fontSize:"7pt", height:"12px", display:"flex", alignItems:"center", justifyContent:"center", margin:0 }}>{employeeName}</div>
+              <div style={{ width: "100px", flexShrink: 0, textAlign: "center" }}>
+                <div style={{ fontSize: "7.5pt", fontWeight: "700", height: "12px", display: "flex", alignItems: "center", justifyContent: "center", margin: 0, whiteSpace: "nowrap" }}>
+                  NAME OF EMPLOYEE
+                </div>
+                <div style={{ fontSize: "7pt", height: "12px", display: "flex", alignItems: "center", justifyContent: "center", margin: 0 }}>
+                  {employeeName}
+                </div>
                 {(() => {
                   const labels = [];
                   if (tableData.week1DayLabels.length > 0) labels.push(["Day",""],["Date",""],["Time Management","b"]);
@@ -1239,31 +1394,32 @@ export default function PaySlipGenerator() {
                   labels.push(["Total hrs","r"]);
                   return labels.map(([lbl, cls], i) => (
                     <div key={i} style={{
-                      height:"11px", display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize: cls === "b" || cls === "r" ? "7pt" : "6.5pt",
+                      height: "11px", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize:   cls === "b" || cls === "r" ? "7pt" : "6.5pt",
                       fontWeight: cls === "b" || cls === "r" ? "700" : "400",
-                      color: cls === "r" ? BLUE_CSS : cls === "b" ? "#000" : "#555",
-                    }}>{lbl}</div>
+                      color:      cls === "r" ? BLUE_CSS : cls === "b" ? "#000" : "#555",
+                    }}>
+                      {lbl}
+                    </div>
                   ));
                 })()}
               </div>
 
               {/* Timeframe grid */}
-              <div style={{ flex:"0 1 auto", marginRight:"6px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", height:"12px", margin:0 }}>
-                  <div style={{ fontSize:"7.5pt", fontWeight:"700" }}>Timeframe</div>
-                  <div style={{ fontSize:"7pt", fontWeight:"700", whiteSpace:"nowrap" }}>
-                    Submitted on {new Date().toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" })}
+              <div style={{ flex: "0 1 auto", marginRight: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "12px", margin: 0 }}>
+                  <div style={{ fontSize: "7.5pt", fontWeight: "700" }}>Timeframe</div>
+                  <div style={{ fontSize: "11pt", fontWeight: "700", whiteSpace: "nowrap" }}>
+                    Submitted on {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
                   </div>
                 </div>
-                <div style={{ fontSize:"7pt", height:"12px", display:"flex", alignItems:"center", margin:0 }}>
-                  {MONTHS[currentPaySlip.month]} {currentPaySlip.year} – {currentPaySlip.periodLabel}
+                <div style={{ fontSize: "7pt", height: "12px", display: "flex", alignItems: "center", margin: 0 }}>
+                  Week of {MONTHS[currentPaySlip.month]} {new Date(currentPaySlip.startDate).getUTCDate()}-{new Date(currentPaySlip.endDate).getUTCDate()}, {currentPaySlip.year}
                 </div>
-                <table style={{ borderCollapse:"collapse", width:"100%", fontSize:"6.5pt", tableLayout:"fixed" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "6.5pt", tableLayout: "fixed" }}>
                   <colgroup>
-                    <col style={{width:"13%"}}/><col style={{width:"13%"}}/><col style={{width:"13%"}}/>
-                    <col style={{width:"11%"}}/><col style={{width:"11%"}}/><col style={{width:"11%"}}/>
-                    <col style={{width:"5%"}} /><col style={{width:"13%"}}/>
+                    <col style={{ width: "13%" }} /><col style={{ width: "13%" }} /><col style={{ width: "13%" }} />
+                    <col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "5%" }} /><col style={{ width: "13%" }} />
                   </colgroup>
                   <tbody>
                     {tableData.week1DayLabels.length > 0 && (<>
@@ -1281,9 +1437,9 @@ export default function PaySlipGenerator() {
                       <tr>{tableData.week3Dates.map((d,i)=><td key={i} style={tftd({fontWeight:"700"})}>{d}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700",color:BLUE_CSS})}>Weekly Total Hours</td></tr>
                       <tr>{tableData.week3Hours.map((h,i)=><td key={i} style={tftd()}>{h}</td>)}<td style={tftd()}/><td style={tftd({fontWeight:"700"})}>{tableData.weekSubtotals[2]}</td></tr>
                     </>)}
-                    <tr style={{ borderTop:"1.5px solid #000" }}>
+                    <tr style={{ borderTop: "1.5px solid #000" }}>
                       {["","","","","",""].map((v,i)=><td key={i} style={tftd({color:BLUE_CSS,fontWeight:"700"})}>{v}</td>)}
-                      <td style={tftd({color:BLUE_CSS,fontWeight:"700"})}>Grand Total Hours</td>
+                      <td style={tftd({color:BLUE_CSS,fontWeight:"700",whiteSpace:"nowrap"})}>Total Hours</td>
                       <td style={tftd({color:BLUE_CSS,fontWeight:"900",fontSize:"7.5pt"})}>{tableData.totals[2]}</td>
                     </tr>
                   </tbody>
@@ -1291,50 +1447,50 @@ export default function PaySlipGenerator() {
               </div>
 
               {/* Pay Summary */}
-              <div style={{ width:"220px", flexShrink:0, paddingLeft:"6px", fontSize:"7pt", paddingTop:"22px" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"6.5pt", lineHeight:1.5 }}>
+              <div style={{ width: "220px", flexShrink: 0, paddingLeft: "6px", fontSize: "7pt", paddingTop: "22px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "6.5pt", lineHeight: 1.5 }}>
                   <tbody>
                     <tr>
-                      <td style={{textAlign:"left",padding:"2px 2px",fontSize:"6.5pt",whiteSpace:"nowrap"}}>Billing Rate (hourly)</td>
-                      <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{effectiveHourlyRate.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"2px 2px", fontSize:"6.5pt", whiteSpace:"nowrap" }}>Billing Rate (hourly)</td>
+                      <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{effectiveHourlyRate.toFixed(2)}</td>
                     </tr>
                     <tr>
-                      <td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>Basic Pay</td>
-                      <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{effectiveBasicPay.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>Basic Pay</td>
+                      <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{effectiveBasicPay.toFixed(2)}</td>
                     </tr>
                     <tr>
-                      <td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>Undertime Deduction</td>
-                      <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{undertimeDeduct.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>Undertime Deduction</td>
+                      <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{undertimeDeduct.toFixed(2)}</td>
                     </tr>
                     {showGovDeductions && (<>
                       <tr>
-                        <td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>SSS Contribution</td>
-                        <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{sssDeduction.toFixed(2)}</td>
+                        <td style={{ textAlign:"left",  padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>SSS Contribution</td>
+                        <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{sssDeduction.toFixed(2)}</td>
                       </tr>
                       <tr>
-                        <td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>PhilHealth Premium</td>
-                        <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{philhealthDeduction.toFixed(2)}</td>
+                        <td style={{ textAlign:"left",  padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>PhilHealth Premium</td>
+                        <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{philhealthDeduction.toFixed(2)}</td>
                       </tr>
                       <tr>
-                        <td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>Pag-IBIG Contribution</td>
-                        <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{pagibigDeduction.toFixed(2)}</td>
+                        <td style={{ textAlign:"left",  padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>Pag-IBIG Contribution</td>
+                        <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{pagibigDeduction.toFixed(2)}</td>
                       </tr>
                     </>)}
                     <tr>
-                      <td style={{textAlign:"left",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>Cash Advance Deduction</td>
-                      <td style={{textAlign:"right",padding:"2px 2px",fontWeight:"700",color:RED_CSS,fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{cashAdvance.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>Cash Advance Deduction</td>
+                      <td style={{ textAlign:"right", padding:"2px 2px", fontWeight:"700", color:RED_CSS, fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{cashAdvance.toFixed(2)}</td>
                     </tr>
                     <tr>
-                      <td style={{textAlign:"left",padding:"2px 2px",fontSize:"6.5pt",whiteSpace:"nowrap"}}>Subsidy</td>
-                      <td style={{textAlign:"right",padding:"2px 2px",fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{subsidyValue.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"2px 2px", fontSize:"6.5pt", whiteSpace:"nowrap" }}>Subsidy</td>
+                      <td style={{ textAlign:"right", padding:"2px 2px", fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{subsidyValue.toFixed(2)}</td>
                     </tr>
                     <tr>
-                      <td style={{textAlign:"left",padding:"2px 2px",fontSize:"6.5pt",whiteSpace:"nowrap"}}>Total Out of Town</td>
-                      <td style={{textAlign:"right",padding:"2px 2px",fontSize:"6.5pt",whiteSpace:"nowrap"}}>P{outOfTownTotal.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"2px 2px", fontSize:"6.5pt", whiteSpace:"nowrap" }}>Total Out of Town</td>
+                      <td style={{ textAlign:"right", padding:"2px 2px", fontSize:"6.5pt", whiteSpace:"nowrap" }}>P{outOfTownTotal.toFixed(2)}</td>
                     </tr>
                     <tr style={{ borderTop:"1px solid #888" }}>
-                      <td style={{textAlign:"left",padding:"3px 2px 0",fontSize:"7.5pt",whiteSpace:"nowrap"}}>Net Pay</td>
-                      <td style={{textAlign:"right",padding:"3px 2px 0",fontWeight:"900",fontSize:"8.5pt",whiteSpace:"nowrap"}}>P{effectiveNetPayAfterCashAdvance.toFixed(2)}</td>
+                      <td style={{ textAlign:"left",  padding:"3px 2px 0", fontSize:"7.5pt", whiteSpace:"nowrap" }}>Net Pay</td>
+                      <td style={{ textAlign:"right", padding:"3px 2px 0", fontWeight:"900", fontSize:"8.5pt", whiteSpace:"nowrap" }}>P{effectiveNetPayAfterCashAdvance.toFixed(2)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1342,21 +1498,21 @@ export default function PaySlipGenerator() {
             </div>
 
             {/* Breakdown */}
-            <div style={{ marginTop:"8px", paddingTop:"6px", borderTop:"1px solid #ccc", fontSize:"6pt", fontWeight:"700", marginBottom:"2px" }}>Breakdown</div>
+            <div style={{ marginTop:"8px", paddingTop:"6px", borderTop:"1px solid #ccc", fontSize:"6pt", fontWeight:"700", marginBottom:"2px" }}>
+              Breakdown
+            </div>
             {currentPaySlip.workDays && (() => (
               <>
                 <BDTable
                   rows={tableData.breakdownBlocks[0].map(d => {
                     const h   = hasWorkedTime(d) && d.status !== "absent";
                     const key = new Date(d.date).toISOString().slice(0, 10);
-                    return {
-                      id:  key,
-                      day: d.dayOfWeek,
-                      ti:  h ? formatTime12(d.timeIn)         : "",
+                    return { id: key, day: d.dayOfWeek,
+                      ti:  h ? formatTime12(d.timeIn)           : "",
                       brk: h ? (formatTime12(d.breakTime) || "") : "",
                       res: h ? (formatTime12(d.resume)    || "") : "",
                       to:  h ? (formatTime12(d.timeOut)   || "") : "",
-                      hrs: h ? getDayHours(d).toFixed(2)       : "",
+                      hrs: h ? getDayHours(d).toFixed(2)         : "",
                       rmk: remarksByDate[key] || "",
                     };
                   })}
@@ -1367,14 +1523,12 @@ export default function PaySlipGenerator() {
                   rows={tableData.breakdownBlocks[1].map(d => {
                     const h   = hasWorkedTime(d) && d.status !== "absent";
                     const key = new Date(d.date).toISOString().slice(0, 10);
-                    return {
-                      id:  key,
-                      day: d.dayOfWeek,
-                      ti:  h ? formatTime12(d.timeIn)         : "",
+                    return { id: key, day: d.dayOfWeek,
+                      ti:  h ? formatTime12(d.timeIn)           : "",
                       brk: h ? (formatTime12(d.breakTime) || "") : "",
                       res: h ? (formatTime12(d.resume)    || "") : "",
                       to:  h ? (formatTime12(d.timeOut)   || "") : "",
-                      hrs: h ? getDayHours(d).toFixed(2)       : "",
+                      hrs: h ? getDayHours(d).toFixed(2)         : "",
                       rmk: remarksByDate[key] || "",
                     };
                   })}
@@ -1386,33 +1540,57 @@ export default function PaySlipGenerator() {
 
             {/* Signatures */}
             <div style={{ marginTop:"12px", fontSize:"7pt" }}>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", columnGap:"50px", alignItems:"start", marginBottom:"8px" }}>
-                <div><strong>Prepared By:</strong>&nbsp;&nbsp;{(preparedBy && preparedBy.trim()) ? preparedBy.trim() : employeeName}</div>
-                <div style={{ display:"flex", alignItems:"flex-start", gap:"6px" }}>
-                  <strong>Approved By:</strong>
-                  <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center" }}>
-                    <u><strong>Joel V. Agsaoay</strong></u>
-                    <div style={{ fontSize:"6.5pt", marginTop:"2px" }}>President/CEO</div>
-                  </div>
+              <div style={{
+                display:"grid",
+                gridTemplateColumns: showApprovedBy1 && showApprovedBy2
+                  ? "1fr 1fr 1fr"
+                  : showApprovedBy1 || showApprovedBy2 ? "1fr 1fr" : "1fr",
+                columnGap:"50px", alignItems:"start", marginBottom:"8px",
+              }}>
+                <div>
+                  <strong>Prepared By:</strong>&nbsp;&nbsp;
+                  {(preparedBy && preparedBy.trim()) ? preparedBy.trim() : employeeName}
                 </div>
-                <div style={{ display:"flex", alignItems:"flex-start", gap:"6px" }}>
-                  <strong>Approved By:</strong>
-                  <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center" }}>
-                    <u><strong>Emmanuel A. Reonal</strong></u>
-                    <div style={{ fontSize:"6.5pt", marginTop:"2px" }}>EVP / Vice President</div>
+                {showApprovedBy1 && (
+                  <div style={{ display:"flex", alignItems:"flex-start", gap:"6px" }}>
+                    <strong>Approved By:</strong>
+                    <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center" }}>
+                      <u><strong>{(approvedBy1 && approvedBy1.trim()) ? approvedBy1.trim() : "Joel V. Agsaoay"}</strong></u>
+                      <div style={{ fontSize:"6.5pt", marginTop:"2px" }}>President/CEO</div>
+                    </div>
                   </div>
-                </div>
+                )}
+                {showApprovedBy2 && (
+                  <div style={{ display:"flex", alignItems:"flex-start", gap:"6px" }}>
+                    <strong>Approved By:</strong>
+                    <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center" }}>
+                      <u><strong>{(approvedBy2 && approvedBy2.trim()) ? approvedBy2.trim() : "Emmanuel A. Reonal"}</strong></u>
+                      <div style={{ fontSize:"6.5pt", marginTop:"2px" }}>EVP / Vice President</div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div><strong>Received By:</strong>&nbsp;&nbsp;{employeeName}</div>
             </div>
-
           </div>
         ) : (
-          <div style={{ width:"1100px", background:"#fff", padding:"40px", boxShadow:"0 3px 18px rgba(0,0,0,.3)", textAlign:"center", minHeight:"500px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div style={{
+            width:"1100px", background:"#fff", padding:"40px",
+            boxShadow:"0 3px 18px rgba(0,0,0,.3)", textAlign:"center",
+            minHeight:"500px", display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
             <div>
-              <div style={{ fontSize:"16pt", fontWeight:"bold", marginBottom:"10px", color:NAVY_CSS }}>No Pay Slip Data Available</div>
-              <div style={{ fontSize:"10pt", color:"#666" }}>Please select an employee and pay period to generate a pay slip.</div>
-              {loading && <div style={{ marginTop:"20px" }}><ShimmerLoader type="card" height="100px"/></div>}
+              <div style={{ fontSize:"16pt", fontWeight:"bold", marginBottom:"10px", color:NAVY_CSS }}>
+                No Pay Slip Data Available
+              </div>
+              <div style={{ fontSize:"10pt", color:"#666" }}>
+                Please select an employee and pay period to generate a pay slip.
+              </div>
+              {loading && (
+                <div style={{ marginTop:"20px" }}>
+                  <ShimmerLoader type="card" height="100px" />
+                </div>
+              )}
             </div>
           </div>
         )}
