@@ -289,14 +289,14 @@ function BDTable({ rows, total, onRemarkChange }) {
           <td style={{
             ...td(false), textAlign: "right", fontWeight: "700",
             borderTop: "0.5px solid #000", borderBottom: "none",
-            padding: "0 3px", lineHeight: 1.1, whiteSpace: "nowrap",
+            padding: "0 3px", lineHeight: 1.1, whiteSpace: "nowrap", color: "#132440",
           }}>
             Total Hours Spent
           </td>
           <td style={{
             ...td(false), textAlign: "right", fontWeight: "700",
             borderTop: "0.5px solid #000", borderBottom: "none",
-            padding: "0 3px", lineHeight: 1.1, whiteSpace: "nowrap",
+            padding: "0 3px", lineHeight: 1.1, whiteSpace: "nowrap", color: "#132440",
           }}>
             {total}
           </td>
@@ -344,9 +344,45 @@ export default function PaySlipGenerator() {
   const [applyPhilHealthDeduction, setApplyPhilHealthDeduction] = useState(false);
   const [applyPagIbigDeduction,    setApplyPagIbigDeduction]    = useState(false);
 
+  // Company presets
+  const companyPresets = {
+    digicomlink: {
+      name: 'DigicomLink Systems Corporation',
+      address: '202 P&J Bldg., Tiano Bros.-Kalambaguahan Sts.,',
+      city: 'Cagayan de Oro City, 9000, Philippines',
+      phone: '(088) 856-8433',
+      website: 'www.digicomlink.com',
+      logo: '/Digicomlinklogo.png',
+      color: '#A72703', // Red
+    },
+    datalogix: {
+      name: 'Datalogix Solutions Corporation',
+      address: '202 P&J Bldg., Tiano Bros.-Kalambaguahan Sts.,',
+      city: 'Cagayan de Oro City, 9000, Philippines',
+      phone: '(088) 856-6433',
+      website: 'www.datalogix.com.ph',
+      logo: '/DataLogixLogo.png',
+      color: '#1a3a8f', // Blue
+    },
+    newcompany: {
+      name: 'New Company',
+      address: 'New Address',
+      city: 'New City',
+      phone: 'New Phone',
+      website: 'New Website',
+      logo: '/NewLogo.png',
+      color: '#000000', // Black
+    },
+  };
+
+  // Selected company tab
+  const [selectedCompany, setSelectedCompany] = useState(() => {
+    return localStorage.getItem('payslipSelectedCompany') || 'digicomlink';
+  });
+
   // Company information
-  const [companyName, setCompanyName] = useState(() => localStorage.getItem('payslipCompanyName') || 'DigicomLink Systems Corp');
-  const [website,     setWebsite]     = useState(() => localStorage.getItem('payslipWebsite') || 'www.digicomlink.com');
+  const [companyName, setCompanyName] = useState(() => localStorage.getItem('payslipCompanyName') || companyPresets.digicomlink.name);
+  const [website,     setWebsite]     = useState(() => localStorage.getItem('payslipWebsite') || companyPresets.digicomlink.website);
   const [companyAddress, setCompanyAddress] = useState(() => localStorage.getItem('payslipCompanyAddress') || '');
   const [companyCity,    setCompanyCity]    = useState(() => localStorage.getItem('payslipCompanyCity') || '');
   const [companyPhone,   setCompanyPhone]   = useState(() => localStorage.getItem('payslipCompanyPhone') || '');
@@ -386,11 +422,25 @@ export default function PaySlipGenerator() {
   useEffect(() => { localStorage.setItem('payslipCompanyCity', companyCity); }, [companyCity]);
   useEffect(() => { localStorage.setItem('payslipCompanyPhone', companyPhone); }, [companyPhone]);
 
+  // Persist selected company
+  useEffect(() => { localStorage.setItem('payslipSelectedCompany', selectedCompany); }, [selectedCompany]);
+
+  // Load company info when switching companies
+  useEffect(() => {
+    const preset = companyPresets[selectedCompany];
+    setCompanyName(preset.name);
+    setWebsite(preset.website);
+    setCompanyAddress(preset.address);
+    setCompanyCity(preset.city);
+    setCompanyPhone(preset.phone);
+    // Load preset logo if it exists in public folder
+    setLogoImage(null); // Reset to use default logo from public
+    localStorage.removeItem('payslipLogo'); // Clear custom logo
+  }, [selectedCompany]);
+
   const genKey = `${selectedEmployee?._id || ""}-${selectedPeriod?.id || ""}-${year}-${month}`;
   const debouncedGenKey = useDebounce(genKey, 350);
   useEffect(() => { if (selectedEmployee && selectedPeriod) generatePaySlip(); }, [debouncedGenKey]);
-
-  useEffect(() => { localStorage.setItem('payslipLogo', logoImage); }, [logoImage]);
   useEffect(() => {
     const loadRate = async () => {
       if (!selectedEmployee?._id) { setCashAdvanceLimit(null); return; }
@@ -662,6 +712,16 @@ export default function PaySlipGenerator() {
       const LGRY = [210, 210, 210];
 
       // ── helpers ────────────────────────────────────────────────────────────
+      const hexToRgb = (hex) => {
+        if (!hex) return BLK;
+        if (Array.isArray(hex)) return hex;
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? [
+          parseInt(result[1], 16),
+          parseInt(result[2], 16),
+          parseInt(result[3], 16)
+        ] : BLK;
+      };
       const setColor = (rgb) => doc.setTextColor(...rgb);
       const setFill  = (rgb) => doc.setFillColor(...rgb);
       const setDraw  = (rgb) => doc.setDrawColor(...rgb);
@@ -683,11 +743,16 @@ export default function PaySlipGenerator() {
 
       // ── FIX 1: async logo load so we get real pixel dimensions ─────────────
       let logoW = 0, logoH = 0;
-      if (logoImage) {
+      const logoToUse = logoImage || companyPresets[selectedCompany].logo;
+      if (logoToUse) {
         await new Promise((resolve) => {
           const img = new Image();
+          img.crossOrigin = "anonymous";
           img.onload = () => {
-            const maxW = 40, maxH = 20;
+            const pxToMm = (px) => px * 25.4 / 96;
+            const previewPx = selectedCompany === 'digicomlink' ? 48 : 50;
+            const maxW = pxToMm(previewPx);
+            const maxH = pxToMm(previewPx);
             const ratio = img.naturalWidth / (img.naturalHeight || 1);
             if (ratio >= maxW / maxH) {
               logoW = maxW; logoH = maxW / ratio;
@@ -698,26 +763,42 @@ export default function PaySlipGenerator() {
             resolve();
           };
           img.onerror = resolve;
-          img.src = logoImage;
+          img.src = logoToUse;
         });
       }
 
       // ── Company header ─────────────────────────────────────────────────────
       const headerY = y;
       const logoMargin = 8;
-      
-      if (logoImage && logoW > 0) {
-        const logoX = PW / 2 - logoW / 2 - 60;
-        const logoY = headerY + 4;
-        try { doc.addImage(logoImage, "PNG", logoX, logoY, logoW, logoH); }
+      const headerColor = hexToRgb(companyPresets[selectedCompany].color);
+
+      font("normal", 7);
+      const headerLines = [
+        companyName,
+        companyAddress,
+        companyCity,
+        `Tel: ${companyPhone} | ${website}`,
+      ];
+      const maxTextW  = Math.max(...headerLines.map(t => doc.getTextWidth(t)));
+      const GAP       = 4; // mm between logo and text
+      const groupW    = (logoW > 0 ? logoW + GAP : 0) + maxTextW;
+      const groupX    = PW / 2 - groupW / 2;
+      const textX     = groupX + (logoW > 0 ? logoW + GAP : 0);
+
+      if (logoToUse && logoW > 0) {
+        const logoX = groupX;
+        const logoY = headerY + (20 - logoH) / 2; // vertically center logo in the 20mm header band
+        try { doc.addImage(logoToUse, "PNG", logoX, logoY, logoW, logoH); }
         catch (e) { console.warn("Logo add failed:", e); }
       }
-      
-      font("normal", 7); setColor(BLK);
-      txt(companyName,                         PW / 2, headerY + 6,  "center");
-      txt(companyAddress,                      PW / 2, headerY + 10, "center");
-      txt(companyCity,                         PW / 2, headerY + 14, "center");
-      txt(`Tel: ${companyPhone} | ${website}`, PW / 2, headerY + 18, "center");
+
+      const textCenterX = textX + maxTextW / 2;
+
+      setColor(headerColor);
+      txt(companyName,                         textCenterX, headerY + 6,  "center");
+      txt(companyAddress,                      textCenterX, headerY + 10, "center");
+      txt(companyCity,                         textCenterX, headerY + 14, "center");
+      txt(`Tel: ${companyPhone} | ${website}`, textCenterX, headerY + 18, "center");
       y = headerY + 25;
 
       // ── PAYSLIP title ──────────────────────────────────────────────────────
@@ -1236,6 +1317,45 @@ export default function PaySlipGenerator() {
 
             {/* ── 5. Branding ── */}
             <AccordionSection title="Branding" icon="◈">
+              {/* Company tabs */}
+              <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                <button
+                  onClick={() => setSelectedCompany('digicomlink')}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    background: selectedCompany === 'digicomlink' ? companyPresets.digicomlink.color : "#fff",
+                    color: selectedCompany === 'digicomlink' ? "#fff" : companyPresets.digicomlink.color,
+                    border: `2px solid ${companyPresets.digicomlink.color}`,
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans',sans-serif",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  DigicomLink
+                </button>
+                <button
+                  onClick={() => setSelectedCompany('datalogix')}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    background: selectedCompany === 'datalogix' ? companyPresets.datalogix.color : "#fff",
+                    color: selectedCompany === 'datalogix' ? "#fff" : companyPresets.datalogix.color,
+                    border: `2px solid ${companyPresets.datalogix.color}`,
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans',sans-serif",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  Datalogix
+                </button>
+              </div>
               <div style={fgStyle}>
                 <label style={lblStyle}>Logo</label>
                 {logoImage ? (
@@ -1248,13 +1368,18 @@ export default function PaySlipGenerator() {
                     </button>
                   </div>
                 ) : (
-                  <>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <img
+                      src={companyPresets[selectedCompany].logo}
+                      alt={`${selectedCompany} Logo`}
+                      style={{ width: "40px", height: "40px", objectFit: "contain", border: "1px solid #e8dfd6", borderRadius: "4px" }}
+                    />
                     <input type="file" id="logo-upload" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
                     <label htmlFor="logo-upload"
-                      style={{ display: "block", padding: "8px", background: "#f8fafc", border: "2px dashed #cbd5e1", borderRadius: "6px", textAlign: "center", cursor: "pointer", fontSize: "11px", color: "#64748b", fontWeight: "500" }}>
-                      Click to upload logo
+                      style={{ display: "block", padding: "8px", background: "#f8fafc", border: "2px dashed #cbd5e1", borderRadius: "6px", textAlign: "center", cursor: "pointer", fontSize: "11px", color: "#64748b", fontWeight: "500", flex: 1 }}>
+                      Upload custom logo
                     </label>
-                  </>
+                  </div>
                 )}
               </div>
               <div style={fgStyle}>
@@ -1359,10 +1484,16 @@ export default function PaySlipGenerator() {
           }}>
             {/* Company Information */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginBottom: "12px" }}>
-              {logoImage && (
+              {logoImage ? (
                 <img src={logoImage} alt="Logo" style={{ height: "50px", width: "auto", maxHeight: "50px", objectFit: "contain" }} />
+              ) : (
+                <img
+                  src={companyPresets[selectedCompany].logo}
+                  alt={`${selectedCompany} Logo`}
+                  style={{ height: selectedCompany === 'digicomlink' ? "48px" : "50px", width: "auto", maxHeight: selectedCompany === 'digicomlink' ? "48px" : "50px", objectFit: "contain" }}
+                />
               )}
-              <div style={{ textAlign: "center", fontSize: "7pt", color: "#000" }}>
+              <div style={{ textAlign: "center", fontSize: "7pt", color: companyPresets[selectedCompany].color }}>
                 <div style={{ marginBottom: "2px" }}>{companyName}</div>
                 <div style={{ marginBottom: "1px" }}>{companyAddress}</div>
                 <div style={{ marginBottom: "1px" }}>{companyCity}</div>
