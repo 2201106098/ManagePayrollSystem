@@ -890,17 +890,33 @@ export default function PaySlipGenerator() {
         setColor(leftBlueArr[ri] ? NAVY : BLK);
         txt(leftLabelsArr[ri], lx + LCW / 2, y + ROW_H - 1, "center");
 
+        const isLastRow = ri === tfRows.length - 1;
+
+        if (isLastRow) {
+          // Draw top border across the TF grid
+          line(tfx, y, tfx + TFW, y, 0.3, LGRY);
+          // Calculate the exact start of column 7
+          const col7X = colWidths.slice(0, 7).reduce((sum, w) => sum + w, tfx);
+          const col7W = colWidths[7];
+          font("bold", 7.5); setColor(NAVY);
+          // "Total Hours" right-aligned ending just at col7 boundary
+          txt("Total Hours", col7X - 1, y + ROW_H - 1, "right");
+          // Total value centered in col7
+          txt(tableData.totals[2], col7X + col7W / 2, y + ROW_H - 1, "center");
+          y += ROW_H;
+          return;
+        }
+
         row.cells.forEach((cellVal, ci) => {
-          const cw       = colWidths[ci];
-          const isSpacer = ci === 6 && ri !== tfRows.length - 1;
+          const cw          = colWidths[ci];
+          const isSpacer    = ci === 6;
           if (isSpacer) { cx += cw; return; }
-          const isTotal     = ri === tfRows.length - 1;
           const isWeeklyLbl = ci === 7 && (ri === 1 || ri === 4 || ri === 7);
           font(
             row.bold || (ci === 7 && ri >= 2) ? "bold" : "normal",
-            isTotal && ci === 7 ? 7.5 : 6,
+            6,
           );
-          setColor(isTotal ? NAVY : isWeeklyLbl ? NAVY : BLK);
+          setColor(isWeeklyLbl ? NAVY : BLK);
           txt(cellVal, cx + cw / 2, y + ROW_H - 1, "center");
           line(cx, y + ROW_H, cx + cw, y + ROW_H, 0.1, LGRY);
           cx += cw;
@@ -963,7 +979,7 @@ export default function PaySlipGenerator() {
           let cxh = M;
           bdColW.forEach((cw, ci) => {
             fillRect(cxh, y, cw, 4, [240, 240, 240]);
-            line(cxh, y + 4, cxh + cw, y + 4, 0.08, BLK);
+            line(cxh, y + 4, cxh + cw, y + 4, 0.05, LGRY);
             font("normal", 5.5); setColor(BLK);
             txt(BD_COLS[ci], cxh + cw / 2, y + 3, "center");
             cxh += cw;
@@ -994,7 +1010,7 @@ export default function PaySlipGenerator() {
             cells.forEach((val, ci) => {
               font("normal", 5.5); setColor(BLK);
               txt(val, cx + bdColW[ci] / 2, y + 3, "center");
-              line(cx, y + 3.8, cx + bdColW[ci], y + 3.8, 0.08, BLK);
+              line(cx, y + 3.8, cx + bdColW[ci], y + 3.8, 0.05, LGRY);
               cx += bdColW[ci];
             });
             y += 3.8;
@@ -1002,7 +1018,7 @@ export default function PaySlipGenerator() {
 
           ensureSpace(5);
           y += 0.15;
-          line(M, y, M + CW, y, 0.08, BLK);
+          line(M, y, M + CW, y, 0.05, LGRY);
 
           // FIX 5: correct column boundary X positions for the footer row
           const col4end = M + bdColW.slice(0, 4).reduce((a, b) => a + b, 0);
@@ -1012,9 +1028,9 @@ export default function PaySlipGenerator() {
           font("bold", 5.5); setColor(BLK);
           txt("Total Hours Spent", col5end - 1,  y + 2.6, "right");
           txt(tableData.totals[bi], col6end - 1, y + 2.6, "right");
-          line(col5end, y, col5end, y + 3.2, 0.08, BLK);
-          line(col6end, y, col6end, y + 3.2, 0.08, BLK);
-          line(M, y + 3.2, M + CW, y + 3.2, 0.08, BLK);
+          line(col5end, y, col5end, y + 3.2, 0.05, LGRY);
+          line(col6end, y, col6end, y + 3.2, 0.05, LGRY);
+          line(M, y + 3.2, M + CW, y + 3.2, 0.05, LGRY);
           y += 3.5;
         });
       }
