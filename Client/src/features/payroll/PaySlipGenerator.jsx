@@ -750,7 +750,7 @@ export default function PaySlipGenerator() {
           img.crossOrigin = "anonymous";
           img.onload = () => {
             const pxToMm = (px) => px * 25.4 / 96;
-            const previewPx = selectedCompany === 'digicomlink' ? 48 : 50;
+            const previewPx = selectedCompany === 'digicomlink' ? 48 : 160;
             const maxW = pxToMm(previewPx);
             const maxH = pxToMm(previewPx);
             const ratio = img.naturalWidth / (img.naturalHeight || 1);
